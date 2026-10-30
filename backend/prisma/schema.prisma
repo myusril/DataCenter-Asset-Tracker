@@ -1,0 +1,11 @@
+// Prisma schema for DataCenter Asset Tracker.
+// Models are added together with the auth module; the datasource and client
+// generator are enough for the initial server bootstrap.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
