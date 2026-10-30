@@ -358,9 +358,9 @@ tidak ada → **404**. Body update tidak boleh mengubah `assetId`.
 
 ```json
 {
-  "total": 6,
-  "byType": { "ROUTINE": 1, "REPAIR": 2, "UPGRADE": 1, "INSPECTION": 1, "REPLACEMENT": 1 },
-  "totalCost": 4350000,
+  "total": 8,
+  "byType": { "ROUTINE": 2, "REPAIR": 2, "UPGRADE": 1, "INSPECTION": 2, "REPLACEMENT": 1 },
+  "totalCost": 4600000,
   "thisMonthCount": 2,
   "upcomingSchedules": 1
 }
@@ -448,7 +448,7 @@ terbaru.
 ```json
 {
   "total": 8,
-  "byConnectionStatus": { "ONLINE": 5, "OFFLINE": 1, "UNKNOWN": 2 },
+  "byConnectionStatus": { "ONLINE": 6, "OFFLINE": 1, "UNKNOWN": 1 },
   "lastCheckedWithin24h": 8
 }
 ```

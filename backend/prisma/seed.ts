@@ -283,6 +283,22 @@ const MAINTENANCES: SeedMaintenance[] = [
     cost: '0',
   },
   {
+    assetCode: 'RT-001',
+    maintenanceType: MaintenanceType.ROUTINE,
+    maintenanceDate: '2026-04-15',
+    description: 'Pengecekan routing dan konfigurasi BGP',
+    result: 'OK - rute stabil',
+    cost: '0',
+  },
+  {
+    assetCode: 'FW-001',
+    maintenanceType: MaintenanceType.INSPECTION,
+    maintenanceDate: '2026-09-20',
+    description: 'Audit rule firewall',
+    result: 'OK - 2 rule usang dibersihkan',
+    cost: '250000',
+  },
+  {
     assetCode: 'STG-001',
     maintenanceType: MaintenanceType.REPAIR,
     maintenanceDate: '2026-10-05',

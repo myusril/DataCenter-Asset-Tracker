@@ -186,17 +186,17 @@ export async function updateMaintenance(id: number, input: UpdateMaintenanceInpu
     await requireTechnician(input.technicianId);
   }
 
+  const { maintenanceDate, nextSchedule, ...scalars } = input;
+
   await prisma.$transaction(async (tx) => {
     await tx.maintenanceHistory.update({
       where: { id },
       data: {
-        ...input,
-        ...(input.maintenanceDate === undefined
+        ...scalars,
+        ...(maintenanceDate === undefined
           ? {}
-          : { maintenanceDate: parseIsoDate(input.maintenanceDate) }),
-        ...(input.nextSchedule === undefined
-          ? {}
-          : { nextSchedule: parseIsoDate(input.nextSchedule) }),
+          : { maintenanceDate: parseIsoDate(maintenanceDate) }),
+        ...(nextSchedule === undefined ? {} : { nextSchedule: parseIsoDate(nextSchedule) }),
       },
     });
 
