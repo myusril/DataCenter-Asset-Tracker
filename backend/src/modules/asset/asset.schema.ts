@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { idParamSchema, optionalText } from '../../utils/validation.js';
 
 export const assetTypeSchema = z.enum([
   'SERVER',
@@ -13,15 +14,6 @@ export const assetTypeSchema = z.enum([
 export const assetStatusSchema = z.enum(['ACTIVE', 'MAINTENANCE', 'INACTIVE']);
 
 export const connectionStatusSchema = z.enum(['ONLINE', 'OFFLINE', 'UNKNOWN']);
-
-/** Optional text: trailing spaces trimmed, empty string treated as absent. */
-const optionalText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .optional()
-    .transform((value) => (value === '' ? undefined : value));
 
 const isoDateSchema = z.string().date('Invalid date, expected YYYY-MM-DD');
 
@@ -76,7 +68,7 @@ export const listAssetQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(10),
 });
 
-export const idParamSchema = z.coerce.number().int().positive();
+export { idParamSchema };
 
 export type CreateAssetInput = z.infer<typeof createAssetSchema>;
 export type UpdateAssetInput = z.infer<typeof updateAssetSchema>;

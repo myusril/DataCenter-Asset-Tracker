@@ -361,7 +361,7 @@ tidak ada → **404**. Body update tidak boleh mengubah `assetId`.
   "total": 6,
   "byType": { "ROUTINE": 1, "REPAIR": 2, "UPGRADE": 1, "INSPECTION": 1, "REPLACEMENT": 1 },
   "totalCost": 4350000,
-  "thisMonthCount": 0,
+  "thisMonthCount": 2,
   "upcomingSchedules": 1
 }
 ```

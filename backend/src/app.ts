@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 import { env } from './config/env.js';
 import { authRoutes } from './modules/auth/auth.routes.js';
 import { assetRoutes } from './modules/asset/asset.routes.js';
+import { maintenanceRoutes } from './modules/maintenance/maintenance.routes.js';
 import { logger } from './utils/logger.js';
 import { AppError, sendError, type ValidationIssue } from './utils/response.js';
 
@@ -87,6 +88,7 @@ export function createApp(): express.Express {
 
   app.use('/api/auth', authRoutes);
   app.use('/api/assets', assetRoutes);
+  app.use('/api/maintenance', maintenanceRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
