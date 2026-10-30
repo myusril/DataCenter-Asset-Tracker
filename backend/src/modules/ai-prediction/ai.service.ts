@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../config/database.js';
+import { createHighRiskAlerts } from '../notification/notification.service.js';
 import { AppError, buildPagination } from '../../utils/response.js';
 import { decimalToNumber } from '../../utils/serialize.js';
 import { buildNarrative, buildTopFactors, riskLevelForScore } from './ai.explanation.js';
@@ -265,7 +266,19 @@ export async function predictAsset(assetId: number): Promise<PredictResult> {
       select: { id: true, predictedAt: true },
     });
 
-    return { created, alertsCreated: 0 };
+    let alertsCreated = 0;
+    if (assessment.riskLevel === 'HIGH') {
+      alertsCreated = await createHighRiskAlerts(tx, {
+        predictionId: created.id,
+        assetId,
+        assetCode: assessment.assetCode,
+        assetName: assessment.assetName,
+        riskScore: assessment.riskScore,
+        recommendation: assessment.recommendation,
+      });
+    }
+
+    return { created, alertsCreated };
   });
 
   return {

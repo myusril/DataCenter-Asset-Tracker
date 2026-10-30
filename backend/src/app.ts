@@ -7,6 +7,7 @@ import { authRoutes } from './modules/auth/auth.routes.js';
 import { assetRoutes } from './modules/asset/asset.routes.js';
 import { maintenanceRoutes } from './modules/maintenance/maintenance.routes.js';
 import { networkRoutes } from './modules/network/network.routes.js';
+import { notificationRoutes } from './modules/notification/notification.routes.js';
 import { logger } from './utils/logger.js';
 import { AppError, sendError, type ValidationIssue } from './utils/response.js';
 
@@ -93,6 +94,7 @@ export function createApp(): express.Express {
   app.use('/api/maintenance', maintenanceRoutes);
   app.use('/api/network', networkRoutes);
   app.use('/api/ai', aiRoutes);
+  app.use('/api/notifications', notificationRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
