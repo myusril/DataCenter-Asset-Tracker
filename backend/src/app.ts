@@ -2,6 +2,7 @@ import cors from 'cors';
 import express, { type ErrorRequestHandler, type RequestHandler } from 'express';
 import { ZodError } from 'zod';
 import { env } from './config/env.js';
+import { authRoutes } from './modules/auth/auth.routes.js';
 import { logger } from './utils/logger.js';
 import { AppError, sendError, type ValidationIssue } from './utils/response.js';
 
@@ -82,6 +83,8 @@ export function createApp(): express.Express {
       },
     });
   });
+
+  app.use('/api/auth', authRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
