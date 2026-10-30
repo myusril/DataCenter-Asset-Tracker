@@ -8,7 +8,7 @@ dulu, bukan dilakukan diam-diam saat mengerjakan mobile.
 - Content type: `application/json`
 - Semua endpoint selain `GET /health`, `POST /api/auth/register`, dan `POST /api/auth/login`
   membutuhkan header `Authorization: Bearer <token>`.
-- Total endpoint: **24** (Auth 3, Asset 6, Maintenance 7, Network 8).
+- Total endpoint: **37** (Auth 3, Asset 6, Maintenance 7, Network 8, AI 6, Notification 7).
 
 ## 1. Response envelope
 
@@ -453,13 +453,251 @@ terbaru.
 }
 ```
 
-## 6. Health
+## 6. AI Prediction (Hybrid Engine)
+
+Modul `src/modules/ai-prediction/` berisi 7 file sesuai dokumen sumber. Mesin ini adalah
+**heuristik deterministik** (aturan + statistik + pencocokan pola), bukan model machine learning
+yang dilatih, dan tidak memanggil layanan AI eksternal. Tidak ada metrik akurasi yang diklaim.
+
+### Aturan perhitungan
+
+Layer 1 — skor dasar berbobot (setiap faktor dinormalisasi 0–100):
+
+| Faktor | Normalisasi | Bobot |
+|---|---|---|
+| `frequency` | `min(maintenance 90 hari / 5, 1) * 100` | 0.25 |
+| `incidents` | `min(REPAIR 90 hari / 4, 1) * 100` | 0.20 |
+| `age` | `min(usia tahun / 5, 1) * 100` (dari `purchaseDate`, fallback `createdAt`) | 0.15 |
+| `status` | `ACTIVE` 0, `MAINTENANCE` 100, `INACTIVE` 60 | 0.15 |
+| `network` | `ONLINE` 0, `UNKNOWN` 50, `OFFLINE` 100, tanpa baris 50 | 0.05 |
+
+Layer 2 — penyesuaian statistik bertanda, total di-clamp ke ±10:
+
+| Sinyal | Aturan | Rentang |
+|---|---|---|
+| `zScore` | z dari interval maintenance aset terhadap peer satu tipe; **butuh ≥3 peer yang masing-masing punya ≥3 baris**, jika tidak 0. Tanda dibalik: interval lebih pendek dari peer (z negatif) menaikkan risiko. `|z| ≥ 2` penuh, `1.5 ≤ |z| < 2` setengah | ±10 |
+| `trend` | jumlah maintenance 45 hari terakhir dibanding 45 hari sebelumnya: naik +5, turun −5, sama 0 | ±5 |
+| `interval` | rata-rata jarak maintenance **terjadwal (selain `REPAIR`)**; **butuh ≥3 baris terjadwal**, jika tidak 0. `<60` hari +5, `<90` hari +2.5, `>180` hari −5, selain itu 0 | ±5 |
+| `peer` | jumlah maintenance 90 hari di atas median peer satu tipe +5, di bawah −2.5, sama 0; **butuh ≥3 peer**, jika tidak 0 | ±5 |
+
+Layer 3 — pencocokan pola, hanya penambahan, total ≤15 (contoh kerja dokumen memakai 4 komponen):
+
+| Pola | Kondisi | Boost |
+|---|---|---|
+| `downtimeOffline` | network `OFFLINE` | +2.5 |
+| `downtimeRepair` | ≥3 `REPAIR` dalam 90 hari | +1.5 |
+| `repairRatio` | `REPAIR / maintenance 90 hari ≥ 0.5` → `min(rasio * 6.25, 5)` | 0..+5 |
+| `daysSince` | hari sejak maintenance terakhir: 90–180 linear, ≥180 | 0..+5 |
+
+- `final = clamp(layer1 + layer2 + layer3, 0, 100)`, dibulatkan 2 desimal.
+- Level: `≤30` LOW, `≤60` MEDIUM, selain itu HIGH.
+- `confidence = 50 + min(jumlah maintenance, 5) * 5 + (network?10) + (purchaseDate?10) + (usia ≥90 hari?5)`, maksimal 95.
+- `predictedFailureDays = clamp(round((100 - riskScore) * 0.9), 3, 365)`.
+- Skor maksimum yang dapat dicapai dengan bobot di atas adalah **99**; clamp 100 tetap dipertahankan
+  sebagai pengaman. Contoh kerja dokumen (SRV-001): Layer 1 `69.5` + Layer 2 `5` + Layer 3 `9` = **83.5 HIGH**,
+  confidence 95, 15 hari.
+
+Contoh `layerBreakdown` untuk 83.5:
+
+```json
+{
+  "layer1": {
+    "baseScore": 69.5,
+    "factors": [
+      { "name": "frequency", "raw": 100, "weight": 0.25, "impact": 25 },
+      { "name": "incidents", "raw": 100, "weight": 0.2, "impact": 20 },
+      { "name": "age", "raw": 30, "weight": 0.15, "impact": 4.5 },
+      { "name": "status", "raw": 100, "weight": 0.15, "impact": 15 },
+      { "name": "network", "raw": 100, "weight": 0.05, "impact": 5 }
+    ]
+  },
+  "layer2": {
+    "adjustments": { "zScore": 0, "trend": 5, "interval": 0, "peer": 0 },
+    "total": 5
+  },
+  "layer3": {
+    "boosts": { "downtimeOffline": 2.5, "downtimeRepair": 1.5, "repairRatio": 5, "daysSince": 0 },
+    "total": 9
+  },
+  "final": 83.5
+}
+```
+
+### Bentuk prediksi tersimpan
+
+List dan riwayat mengembalikan baris `ai_predictions` dengan `riskScore`/`confidence` sebagai number:
+
+```json
+{
+  "id": 16,
+  "assetId": 10,
+  "riskScore": 83.5,
+  "riskLevel": "HIGH",
+  "confidence": 95,
+  "topFactors": [{ "name": "frequency", "impact": 25, "description": "..." }],
+  "recommendation": "Lakukan inspeksi menyeluruh segera dan jadwalkan penggantian komponen yang berisiko.",
+  "predictedFailureDays": 15,
+  "modelVersion": "v1.0",
+  "predictedAt": "2026-10-30T19:28:00.000Z",
+  "isActive": true,
+  "asset": { "id": 10, "assetCode": "SRV-001", "assetName": "WEB Server 01" }
+}
+```
+
+Menyimpan prediksi baru menonaktifkan prediksi aktif sebelumnya untuk aset yang sama
+(`isActive: false`) dalam satu transaksi. `POST /predict/:assetId` mengembalikan bentuk penilaian
+lengkap ditambah `id`, `predictedAt`, `isActive`, dan `alertsCreated`.
+
+### Penilaian lengkap (explain dan predict)
+
+```json
+{
+  "assetId": 10,
+  "assetCode": "SRV-001",
+  "assetName": "WEB Server 01",
+  "riskScore": 83.5,
+  "riskLevel": "HIGH",
+  "confidence": 95,
+  "predictedFailureDays": 15,
+  "shortSummary": "SRV-001 risiko tinggi (83.5/100) karena frekuensi maintenance tinggi, insiden perbaikan tinggi, status maintenance.",
+  "explanation": "Aset SRV-001 (WEB Server 01) memiliki skor risiko 83.5/100 dengan level HIGH. Faktor dominan: ... Lakukan inspeksi menyeluruh segera ...",
+  "topFactors": [{ "name": "frequency", "impact": 25, "description": "Frekuensi maintenance dalam 90 hari terakhir sangat tinggi" }],
+  "recommendation": "Lakukan inspeksi menyeluruh segera dan jadwalkan penggantian komponen yang berisiko.",
+  "layerBreakdown": { "layer1": {}, "layer2": {}, "layer3": {}, "final": 83.5 },
+  "modelVersion": "v1.0"
+}
+```
+
+`topFactors` berisi 3–5 faktor dengan dampak absolut terbesar. `explanation` adalah 2–4 kalimat
+bahasa Indonesia yang menyebut faktor dominan dan rekomendasi. Rekomendasi mengikuti level: HIGH
+inspeksi segera/penggantian, MEDIUM preventive maintenance, LOW pemantauan rutin.
+
+### Endpoint
+
+| Method | Path | Akses | Keterangan |
+|---|---|---|---|
+| GET | `/api/ai/predictions` | semua role | List prediksi + filter + pagination + `asset` |
+| GET | `/api/ai/predictions/asset/:assetId` | semua role | Riwayat prediksi satu aset, terbaru dulu |
+| GET | `/api/ai/risk-summary` | semua role | Ringkasan dashboard |
+| GET | `/api/ai/explain/:assetId` | semua role | Hitung + jelaskan **tanpa menyimpan** |
+| POST | `/api/ai/predict/:assetId` | ADMIN | Hitung, simpan, nonaktifkan prediksi lama, buat alert HIGH (201) |
+| POST | `/api/ai/predict-batch` | ADMIN | Batch prediksi; body kosong = semua aset |
+
+Urutan route: static (`/predictions`, `/risk-summary`, `/explain/:assetId`, `/predict-batch`) didaftarkan
+sebelum route berparameter.
+
+### Query list prediksi
+
+| Param | Nilai | Default |
+|---|---|---|
+| `assetId` | integer | – |
+| `riskLevel` | `LOW`, `MEDIUM`, `HIGH` | – |
+| `activeOnly` | `true`, `false` | semua |
+| `page`, `limit` | pagination | `1`, `10` |
+
+Urutan: `predictedAt` menurun, lalu `id` menurun.
+
+### Risk summary
+
+```json
+{
+  "counts": { "LOW": 7, "MEDIUM": 1, "HIGH": 1 },
+  "averageScore": 25.26,
+  "topRiskAssets": [
+    {
+      "assetId": 10,
+      "assetCode": "SRV-001",
+      "assetName": "WEB Server 01",
+      "riskScore": 83.5,
+      "riskLevel": "HIGH",
+      "predictedFailureDays": 15,
+      "predictedAt": "2026-10-30T19:28:00.000Z"
+    }
+  ],
+  "assetsWithoutPrediction": 0,
+  "lastPredictedAt": "2026-10-30T19:28:00.000Z"
+}
+```
+
+`counts` dan `averageScore` dihitung dari prediksi **aktif** saja. `topRiskAssets` berisi maksimal 5
+prediksi aktif HIGH/MEDIUM dengan skor tertinggi. `assetsWithoutPrediction` menghitung aset yang belum
+pernah punya baris prediksi. `lastPredictedAt` adalah waktu prediksi terbaru (aktif maupun tidak);
+`null` bila belum ada prediksi.
+
+### Batch
+
+Body: `{ "assetIds": [10, 11] }` atau `{}` untuk semua aset.
+
+```json
+{
+  "processed": 9,
+  "high": 1,
+  "medium": 1,
+  "low": 7,
+  "alertsCreated": 2,
+  "failed": [{ "assetId": 999999, "message": "Asset not found" }]
+}
+```
+
+Kegagalan satu aset dicatat di `failed` dan tidak menggagalkan seluruh batch (HTTP tetap **200**).
+`processed` menghitung aset yang berhasil.
+
+## 7. Notification
+
+Modul `src/modules/notification/` berisi 4 file. Semua endpoint membutuhkan token dan hanya
+menyentuh baris milik user yang login. Notifikasi milik user lain dijawab **404** (bukan 403) agar
+keberadaannya tidak bocor.
+
+### Bentuk notifikasi
+
+```json
+{
+  "id": 8,
+  "type": "AI_ALERT",
+  "title": "AI Alert: SRV-001 risiko HIGH",
+  "message": "Prediksi risiko 83.5/100 (HIGH) untuk SRV-001 - WEB Server 01. Lakukan inspeksi menyeluruh segera ...",
+  "isRead": false,
+  "readAt": null,
+  "createdAt": "2026-10-30T19:28:00.000Z",
+  "assetId": 10,
+  "predictionId": 16,
+  "asset": { "id": 10, "assetCode": "SRV-001", "assetName": "WEB Server 01" }
+}
+```
+
+`asset` dan `predictionId` bernilai `null` untuk notifikasi yang tidak terkait aset/prediksi.
+
+### Endpoint
+
+| Method | Path | Keterangan |
+|---|---|---|
+| GET | `/api/notifications` | List milik user; filter `isRead`, `type`; pagination |
+| GET | `/api/notifications/unread-count` | `{ "unreadCount": 2 }` |
+| GET | `/api/notifications/:id` | Detail milik user |
+| PUT | `/api/notifications/:id/read` | `isRead=true`, `readAt` diisi sekali |
+| PUT | `/api/notifications/read-all` | `{ "updated": 3 }` |
+| DELETE | `/api/notifications/:id` | Hapus satu milik user |
+| DELETE | `/api/notifications/read` | `{ "deleted": 2 }` — hapus semua yang sudah dibaca |
+
+Urutan route: `/unread-count`, `/read-all`, dan `/read` didaftarkan sebelum `/:id` agar tidak
+dianggap sebagai id.
+
+Urutan list: `createdAt` menurun, lalu `id` menurun.
+
+### Alert otomatis
+
+Setiap prediksi berlevel **HIGH** membuat satu baris `AI_ALERT` untuk **setiap user aktif**, berisi
+judul, pesan (skor + rekomendasi), `assetId`, dan `predictionId`. Pembuatan berjalan dalam transaksi
+yang sama dengan penyimpanan prediksi dan idempoten untuk `predictionId` yang sama. Prediksi MEDIUM
+dan LOW tidak membuat alert.
+
+## 8. Health
 
 | Method | Path | Akses | `data` |
 |---|---|---|---|
 | GET | `/health` | publik | `{ "status": "ok", "environment": "development", "timestamp": "..." }` |
 
-## 7. Keputusan atas bagian dokumen yang ambigu
+## 9. Keputusan atas bagian dokumen yang ambigu
 
 | # | Hal | Keputusan |
 |---|---|---|
@@ -470,6 +708,11 @@ terbaru.
 | 5 | Urutan status `MAINTENANCE` vs `result` dimulai `Resolved` | `Resolved` menang → `ACTIVE` |
 | 6 | Port database dokumen 5432 | Lingkungan lokal memakai 5433 |
 | 7 | Node 22 pada dokumen | Lingkungan lokal memakai Node 24.21.0 |
+| 8 | Contoh kerja Layer 2 menulis interval 0 untuk 5 baris dalam 90 hari | Sinyal interval memakai maintenance terjadwal (selain `REPAIR`) dan butuh ≥3 baris; sinyal peer/z-score butuh ≥3 peer |
+| 9 | Dokumen tidak menyebut batas sampel untuk z-score/peer | Keduanya 0 bila peer kurang dari 3, agar sinyal kecil tidak menyesatkan |
+| 10 | Notifikasi milik user lain | Dijawab 404, bukan 403 |
+| 11 | `risk-summary` tidak mendefinisikan populasi hitungan | `counts`/`averageScore` dari prediksi aktif; `assetsWithoutPrediction` dari seluruh riwayat |
+| 12 | Clamp akhir 100 | Skor maksimum yang dapat dicapai adalah 99; clamp 100 adalah pengaman |
 
-Larangan lain yang tetap berlaku: tidak ada endpoint AI/notification pada tahap ini; keduanya
-ditambahkan pada tahap berikutnya tanpa mengubah kontrak di atas.
+Kontrak AI dan notification di atas dipakai oleh tahap mobile. Mesin AI tetap deterministik:
+jangan menambahkan klaim akurasi atau menyebutnya sebagai model yang dilatih.
