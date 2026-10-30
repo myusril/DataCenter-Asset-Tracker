@@ -1,0 +1,211 @@
+// Prisma schema for DataCenter Asset Tracker.
+// 7 domain tables (users, assets, asset_locations, network_information,
+// maintenance_history, ai_predictions, notifications) plus enums.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TECHNICIAN
+}
+
+enum AssetType {
+  SERVER
+  SWITCH
+  ROUTER
+  STORAGE
+  FIREWALL
+  RACK
+  OTHER
+}
+
+enum AssetStatus {
+  ACTIVE
+  MAINTENANCE
+  INACTIVE
+}
+
+enum ConnectionStatus {
+  ONLINE
+  OFFLINE
+  UNKNOWN
+}
+
+enum MaintenanceType {
+  ROUTINE
+  REPAIR
+  UPGRADE
+  INSPECTION
+  REPLACEMENT
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum NotificationType {
+  AI_ALERT
+  MAINTENANCE_REMINDER
+  SYSTEM
+  INFO
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  role         Role     @default(TECHNICIAN)
+  isActive     Boolean  @default(true)
+  lastLogin    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  createdAssets Asset[]              @relation("AssetCreatedBy")
+  maintenances  MaintenanceHistory[] @relation("MaintenanceTechnician")
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Asset {
+  id           Int         @id @default(autoincrement())
+  assetCode    String      @unique
+  assetName    String
+  assetType    AssetType
+  brand        String?
+  model        String?
+  serialNumber String?     @unique
+  purchaseDate DateTime?   @db.Date
+  warrantyEnd  DateTime?   @db.Date
+  status       AssetStatus @default(ACTIVE)
+  description  String?
+  createdBy    Int?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  creator            User?                @relation("AssetCreatedBy", fields: [createdBy], references: [id], onDelete: SetNull)
+  locations          AssetLocation[]
+  networkInformation NetworkInformation?
+  maintenances       MaintenanceHistory[]
+  predictions        AiPrediction[]
+  notifications      Notification[]
+
+  @@index([createdBy])
+  @@index([assetType])
+  @@index([status])
+  @@map("assets")
+}
+
+model AssetLocation {
+  id         Int      @id @default(autoincrement())
+  assetId    Int
+  dataCenter String
+  rack       String?
+  rackSlot   String?
+  floor      String?
+  room       String?
+  isCurrent  Boolean  @default(true)
+  movedAt    DateTime @default(now())
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@index([isCurrent])
+  @@map("asset_locations")
+}
+
+model NetworkInformation {
+  id               Int              @id @default(autoincrement())
+  assetId          Int              @unique
+  hostname         String?
+  ipAddress        String?
+  subnetMask       String?
+  gateway          String?
+  macAddress       String?
+  connectionStatus ConnectionStatus @default(UNKNOWN)
+  lastChecked      DateTime?
+  notes            String?
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@map("network_information")
+}
+
+model MaintenanceHistory {
+  id              Int             @id @default(autoincrement())
+  assetId         Int
+  technicianId    Int?
+  maintenanceType MaintenanceType
+  maintenanceDate DateTime        @db.Date
+  description     String?
+  result          String?
+  cost            Decimal?        @db.Decimal(12, 2)
+  nextSchedule    DateTime?       @db.Date
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  asset      Asset @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  technician User? @relation("MaintenanceTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
+  @@index([technicianId])
+  @@index([maintenanceType])
+  @@index([maintenanceDate])
+  @@map("maintenance_history")
+}
+
+model AiPrediction {
+  id                   Int       @id @default(autoincrement())
+  assetId              Int
+  riskScore            Decimal   @db.Decimal(5, 2)
+  riskLevel            RiskLevel
+  confidence           Decimal?  @db.Decimal(5, 2)
+  topFactors           Json?
+  recommendation       String?
+  predictedFailureDays Int?
+  modelVersion         String    @default("v1.0")
+  predictedAt          DateTime  @default(now())
+  isActive             Boolean   @default(true)
+
+  asset         Asset          @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+
+  @@index([assetId])
+  @@index([isActive])
+  @@index([riskLevel])
+  @@map("ai_predictions")
+}
+
+model Notification {
+  id           Int              @id @default(autoincrement())
+  userId       Int
+  assetId      Int?
+  predictionId Int?
+  type         NotificationType
+  title        String
+  message      String
+  isRead       Boolean          @default(false)
+  readAt       DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset      Asset?        @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  prediction AiPrediction? @relation(fields: [predictionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([assetId])
+  @@index([predictionId])
+  @@map("notifications")
+}
