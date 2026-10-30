@@ -62,12 +62,12 @@ const ASSETS: SeedAsset[] = [
     },
   },
   {
-    assetCode: 'SRV-002',
+    assetCode: 'SRV-004',
     assetName: 'DB Server 01',
     assetType: AssetType.SERVER,
     brand: 'HPE',
     model: 'ProLiant DL380 Gen10',
-    serialNumber: 'SN-DC-SRV-002',
+    serialNumber: 'SN-DC-SRV-004',
     purchaseDate: '2024-05-22',
     warrantyEnd: '2027-05-22',
     status: AssetStatus.ACTIVE,
@@ -267,7 +267,7 @@ const MAINTENANCES: SeedMaintenance[] = [
     nextSchedule: '2027-03-25',
   },
   {
-    assetCode: 'SRV-002',
+    assetCode: 'SRV-004',
     maintenanceType: MaintenanceType.INSPECTION,
     maintenanceDate: '2026-07-18',
     description: 'Pengecekan kesehatan disk dan RAID',

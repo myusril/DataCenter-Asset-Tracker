@@ -262,7 +262,7 @@ di-upsert (field yang tidak dikirim tidak berubah).
 {
   "total": 9,
   "byStatus": { "ACTIVE": 7, "MAINTENANCE": 1, "INACTIVE": 1 },
-  "byType": { "SERVER": 3, "SWITCH": 2, "ROUTER": 1, "STORAGE": 1, "FIREWALL": 1, "RACK": 1, "OTHER": 1 },
+  "byType": { "SERVER": 3, "SWITCH": 1, "ROUTER": 1, "STORAGE": 1, "FIREWALL": 1, "RACK": 1, "OTHER": 1 },
   "warrantyExpiringSoon": 1,
   "addedThisMonth": 2
 }
