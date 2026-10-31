@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { loginRequest } from '../api/auth';
+import { setSessionToken } from '../api/session';
 import type { User } from '../types/api';
 
 interface AuthState {
@@ -51,3 +52,7 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 );
+
+// Keep the HTTP client's token in sync without letting it import this store.
+useAuthStore.subscribe((state) => setSessionToken(state.token));
+setSessionToken(useAuthStore.getState().token);

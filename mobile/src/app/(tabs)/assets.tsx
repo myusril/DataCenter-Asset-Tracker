@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -18,8 +18,10 @@ import { fetchAssets } from '../../api/assets';
 import { extractErrorMessage } from '../../api/client';
 import { AssetCard } from '../../components/AssetCard';
 import { Button } from '../../components/Button';
+import { Chip } from '../../components/Chip';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
+import { useIsAdmin } from '../../hooks/useIsAdmin';
 import { Loading } from '../../components/Loading';
 import { colors } from '../../theme/colors';
 import { radius, spacing, typography } from '../../theme/spacing';
@@ -46,6 +48,7 @@ const STATUS_OPTIONS: Array<{ value: AssetStatus | null; label: string }> = [
 
 export default function AssetsScreen() {
   const router = useRouter();
+  const isAdmin = useIsAdmin();
 
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -119,11 +122,11 @@ export default function AssetsScreen() {
     [debouncedSearch, typeFilter, statusFilter],
   );
 
-  useEffect(() => {
-    setItems([]);
-    setPagination(null);
-    void loadPage(1, 'initial');
-  }, [loadPage]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadPage(1, 'initial');
+    }, [loadPage]),
+  );
 
   function handleEndReached() {
     if (!pagination || loading || refreshing || loadingMoreRef.current) {
@@ -142,9 +145,22 @@ export default function AssetsScreen() {
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>Aset</Text>
-          <Text style={styles.count}>
-            {pagination ? `${pagination.total} aset` : 'Memuat...'}
-          </Text>
+          <View style={styles.headerActions}>
+            <Text style={styles.count}>
+              {pagination ? `${pagination.total} aset` : 'Memuat...'}
+            </Text>
+            {isAdmin ? (
+              <Pressable
+                accessibilityLabel="Tambah aset"
+                accessibilityRole="button"
+                onPress={() => router.push('/asset/new')}
+                style={({ pressed }) => [styles.addButton, pressed ? styles.addPressed : null]}
+              >
+                <Ionicons color={colors.surface} name="add" size={16} />
+                <Text style={styles.addLabel}>Aset</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         <View style={styles.searchBox}>
@@ -169,7 +185,7 @@ export default function AssetsScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.chipRow}>
             {TYPE_OPTIONS.map((option) => (
-              <FilterChip
+              <Chip
                 active={typeFilter === option.value}
                 key={option.label}
                 label={option.label}
@@ -183,7 +199,7 @@ export default function AssetsScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.chipRow}>
             {STATUS_OPTIONS.map((option) => (
-              <FilterChip
+              <Chip
                 active={statusFilter === option.value}
                 key={option.label}
                 label={option.label}
@@ -254,29 +270,6 @@ export default function AssetsScreen() {
   );
 }
 
-function FilterChip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      onPress={onPress}
-      style={[styles.chip, active ? styles.chipActive : null]}
-    >
-      <Text style={[styles.chipLabel, active ? styles.chipLabelActive : null]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 function Separator() {
   return <View style={styles.separator} />;
 }
@@ -303,6 +296,28 @@ const styles = StyleSheet.create({
   count: {
     color: colors.muted,
     fontSize: typography.caption,
+  },
+  headerActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  addButton: {
+    alignItems: 'center',
+    backgroundColor: colors.accent,
+    borderRadius: radius.sm,
+    flexDirection: 'row',
+    gap: 2,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  addPressed: {
+    opacity: 0.85,
+  },
+  addLabel: {
+    color: colors.surface,
+    fontSize: typography.small,
+    fontWeight: '700',
   },
   searchBox: {
     alignItems: 'center',
@@ -332,27 +347,6 @@ const styles = StyleSheet.create({
   chipRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-  },
-  chip: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-  },
-  chipActive: {
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accent,
-  },
-  chipLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    fontWeight: '500',
-  },
-  chipLabelActive: {
-    color: colors.accent,
-    fontWeight: '600',
   },
   listContent: {
     padding: spacing.lg,
