@@ -4,6 +4,10 @@ export default {
   testMatch: ['**/__tests__/**/*.test.ts'],
   extensionsToTreatAsEsm: ['.ts'],
   setupFiles: ['<rootDir>/jest.setup.mjs'],
+  // Every suite shares the dedicated test database and truncates it between
+  // tests, so the files must not run in parallel.
+  maxWorkers: 1,
+  testTimeout: 20000,
   transform: {
     '^.+\\.ts$': [
       'ts-jest',
