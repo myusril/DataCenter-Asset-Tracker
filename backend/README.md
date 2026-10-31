@@ -50,7 +50,10 @@ menang, sehingga nilai sementara bisa diuji tanpa mengubah file (mis. memutar `J
 |---|---|
 | `npm run dev` | Jalankan server dengan `tsx watch` |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Jest (unit test mesin risiko) |
+| `npm test` | Jest: unit + integration test (butuh database test) |
+| `npm run test:coverage` | Jest + coverage, threshold ditegakkan |
+| `npm run test:db:prepare` | Buat/migrasi/kosongkan database `datacenter_tracker_test` |
+| `npm run test:db:drop` | Hapus database test |
 | `npm run build` | Kompilasi ke `dist/` |
 | `npm start` | Jalankan hasil build (`dist/src/server.js`) |
 | `npm run prisma:generate` | Generate Prisma Client |
@@ -95,6 +98,8 @@ backend/
 │   └── utils/               # jwt, password, response, logger, serialize, validation
 ├── jest.config.mjs
 ├── jest.setup.mjs
+├── scripts/test-db.sh       # prepare / truncate / drop database test
+├── test/support/            # helper truncate + fixture (di luar cakupan coverage)
 └── tsconfig.json
 ```
 
@@ -116,13 +121,52 @@ login; notifikasi milik user lain dijawab 404.
 
 ## Pengujian
 
-- **Unit test mesin risiko** (`npm test`): 3 suite, 10 test — batas level risiko, batas skor, dampak
-  kondisi memburuk, reproduksi contoh dokumen (SRV-001 = 83.5), dan penolakan token dengan algoritma lain
+Jest berjalan sebagai ESM (`NODE_OPTIONS=--experimental-vm-modules`) dengan dua lapis:
+
+- **Unit test murni** (tidak menyentuh database): mesin risiko (batas level risiko, batas skor, dampak
+  kondisi memburuk, reproduksi contoh SRV-001 = 83.5) dan penolakan token dengan algoritma lain
   (`none`, `HS512`) maupun secret yang salah.
+- **Integration test HTTP** (`supertest` terhadap `createApp()` dan PostgreSQL khusus test): seluruh
+  **37 endpoint** plus health, mencakup jalur error 400, 401, 403, 404, dan 409.
+
+### Database test terpisah
+
+Test tidak pernah memakai database demo. `npm run test:db:prepare` membuat database
+`datacenter_tracker_test` pada host/port yang sama dengan `DATABASE_URL` di `backend/.env` (hanya nama
+database yang diganti), menjalankan `prisma migrate deploy` (bukan `migrate reset`), lalu mengosongkan
+tabel. `jest.setup.mjs` mengarahkan `DATABASE_URL` proses Jest ke database itu, dan setiap suite
+melakukan `TRUNCATE` sebelum test. Setelah selesai, `npm run test:db:drop` menghapusnya.
+
+| Perintah | Fungsi |
+|---|---|
+| `npm run test:db:prepare` | Buat database test bila belum ada, terapkan migrasi, kosongkan tabel |
+| `npm test` | Jest tanpa laporan coverage (database test harus sudah disiapkan) |
+| `npm run test:coverage` | Jest + coverage + threshold |
+| `npm run test:db:drop` | Hapus database test (idempoten) |
+
+### Hasil terukur
+
+Diukur dengan `npm run test:coverage` pada 31 Oktober 2026 (Node 24.21.0, PostgreSQL 16 port 5433):
+**10 suite, 108 test, semuanya lulus**.
+
+| Metrik | Hasil | Threshold |
+|---|---|---|
+| Statements | 766/841 (**91.08%**) | 70% |
+| Branches | 211/281 (**75.08%**) | 60% |
+| Functions | 171/180 (**95.00%**) | 70% |
+| Lines | 756/830 (**91.08%**) | 70% |
+
+`collectCoverageFrom` mencakup `src/**/*.ts` kecuali `src/server.ts` (entry point proses). Threshold
+ditegakkan di `jest.config.mjs`, sehingga `npm run test:coverage` gagal bila turun di bawah nilai itu.
+`src/config/env.ts` hanya 54.54% statements karena jalur `process.exit(1)` sengaja tidak dijalankan.
+
+Suite integration baru: `auth.api` (17 test), `asset.api` (23), `maintenance.api` (18), `network.api`
+(14), `ai.api` (15), `notification.api` (8), dan `app` (3). 10 test lama tidak diubah.
+
 - **Smoke alur API**: `bash docs/scripts/smoke.sh` (dari root) menjalankan health → login → aset →
   maintenance → jaringan → prediksi → notifikasi dengan `curl`; body JSON diolah memakai `python3`
   (bukan `jq`).
-- Test lain (integration end-to-end) tidak ada; pengujian UI ada di aplikasi mobile.
+- Pengujian UI ada di aplikasi mobile; tidak ada test React Native di repository ini.
 
 ## Batasan
 
