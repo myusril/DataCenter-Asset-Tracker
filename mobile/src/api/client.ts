@@ -1,7 +1,6 @@
 import axios, { AxiosError } from 'axios';
-import { router } from 'expo-router';
 
-import { useAuthStore } from '../store/auth';
+import { getSessionToken, notifyUnauthorized } from './session';
 
 /**
  * The API address comes from `EXPO_PUBLIC_API_URL` only. The fallback is the
@@ -16,7 +15,7 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().token;
+  const token = getSessionToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -28,13 +27,12 @@ api.interceptors.response.use(
   (error: AxiosError) => {
     const url = error.config?.url ?? '';
     const isLoginRequest = url.endsWith('/api/auth/login');
-    const activeToken = useAuthStore.getState().token;
+    const activeToken = getSessionToken();
     const requestToken = error.config?.headers?.Authorization;
     const belongsToActiveSession =
       requestToken === undefined || requestToken === `Bearer ${activeToken}`;
     if (error.response?.status === 401 && !isLoginRequest && belongsToActiveSession) {
-      useAuthStore.getState().logout();
-      router.replace('/(auth)/login');
+      notifyUnauthorized();
     }
     return Promise.reject(error);
   },

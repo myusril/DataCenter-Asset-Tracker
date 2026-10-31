@@ -1,12 +1,29 @@
-import { Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { setUnauthorizedHandler } from '../api/session';
 import { useAuthStore } from '../store/auth';
+import { useNotificationStore } from '../store/notifications';
 import { colors } from '../theme/colors';
 import { spacing, typography } from '../theme/spacing';
+
+// Registered at module scope so a 401 from a screen's first fetch is handled
+// even before any effect has run. `client.ts` only calls this seam.
+setUnauthorizedHandler(() => {
+  useAuthStore.getState().logout();
+  router.replace('/(auth)/login');
+});
+
+// The badge store is a module singleton, so clear it whenever the session
+// changes (logout or a different account) instead of relying on unmount order.
+useAuthStore.subscribe((state, previous) => {
+  if (state.token !== previous.token) {
+    useNotificationStore.getState().reset();
+  }
+});
 
 export default function RootLayout() {
   const isHydrated = useAuthStore((state) => state.isHydrated);
