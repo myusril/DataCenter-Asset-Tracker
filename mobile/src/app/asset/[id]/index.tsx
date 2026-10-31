@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { fetchRiskExplanation } from '../../../api/ai';
+import { fetchRiskExplanation, predictAssetRisk } from '../../../api/ai';
 import { fetchAssetDetail } from '../../../api/assets';
 import { extractErrorMessage } from '../../../api/client';
 import { fetchAssetMaintenance } from '../../../api/maintenance';
@@ -20,7 +20,9 @@ import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
 import { EmptyState } from '../../../components/EmptyState';
 import { Loading } from '../../../components/Loading';
+import { ScreenHeader } from '../../../components/ScreenHeader';
 import { StatusPill } from '../../../components/StatusPill';
+import { useIsAdmin } from '../../../hooks/useIsAdmin';
 import { colors } from '../../../theme/colors';
 import { radius, spacing, typography } from '../../../theme/spacing';
 import type {
@@ -79,6 +81,7 @@ const FACTOR_LABELS: Record<string, string> = {
 
 export default function AssetDetailScreen() {
   const router = useRouter();
+  const isAdmin = useIsAdmin();
   const { id } = useLocalSearchParams<{ id: string }>();
   const assetId = Number(id);
 
@@ -90,6 +93,8 @@ export default function AssetDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [predicting, setPredicting] = useState(false);
+  const [predictNotice, setPredictNotice] = useState<string | null>(null);
   const requestId = useRef(0);
   const scrollRef = useRef<ScrollViewInstance>(null);
 
@@ -159,10 +164,30 @@ export default function AssetDetailScreen() {
     router.replace('/(tabs)/assets');
   }
 
+  async function handlePredict() {
+    if (predicting) {
+      return;
+    }
+    setPredicting(true);
+    setPredictNotice(null);
+    try {
+      const result = await predictAssetRisk(assetId);
+      setPredictNotice(
+        `Prediksi diperbarui: ${result.riskScore.toFixed(1)} ${RISK_LABELS[result.riskLevel]}` +
+          `${result.alertsCreated > 0 ? ` · ${result.alertsCreated} alert dibuat` : ''}.`,
+      );
+      await load(true);
+    } catch (caught) {
+      setPredictNotice(`Gagal memperbarui prediksi: ${extractErrorMessage(caught)}`);
+    } finally {
+      setPredicting(false);
+    }
+  }
+
   if (loading && !asset) {
     return (
       <SafeAreaView edges={['top']} style={styles.safe}>
-        <ScreenHeader onBack={goBack} />
+        <ScreenHeader onBack={goBack} title="Detail Aset" />
         <Loading message="Memuat detail aset..." />
       </SafeAreaView>
     );
@@ -171,7 +196,7 @@ export default function AssetDetailScreen() {
   if (!asset) {
     return (
       <SafeAreaView edges={['top']} style={styles.safe}>
-        <ScreenHeader onBack={goBack} />
+        <ScreenHeader onBack={goBack} title="Detail Aset" />
         <View style={styles.listState}>
           <Card title="Gagal memuat detail aset">
             <Text style={styles.bodyText}>{error ?? 'Aset tidak ditemukan.'}</Text>
@@ -190,7 +215,7 @@ export default function AssetDetailScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
-      <ScreenHeader onBack={goBack} />
+      <ScreenHeader onBack={goBack} title="Detail Aset" />
       <ScrollView
         contentContainerStyle={styles.content}
         ref={scrollRef}
@@ -340,31 +365,42 @@ export default function AssetDetailScreen() {
               </Card>
             ) : (
               maintenance.map((record) => (
-                <Card key={record.id}>
-                  <View style={styles.recordHeader}>
-                    <StatusPill
-                      label={MAINTENANCE_TYPE_LABELS[record.maintenanceType]}
-                      tone={MAINTENANCE_TYPE_TONES[record.maintenanceType]}
+                <Pressable
+                  accessibilityRole="button"
+                  key={record.id}
+                  onPress={() => router.push(`/maintenance/${record.id}`)}
+                  style={({ pressed }) => [pressed ? styles.pressedCard : null]}
+                >
+                  <Card>
+                    <View style={styles.recordHeader}>
+                      <StatusPill
+                        label={MAINTENANCE_TYPE_LABELS[record.maintenanceType]}
+                        tone={MAINTENANCE_TYPE_TONES[record.maintenanceType]}
+                      />
+                      <Text style={styles.recordDate}>{formatDate(record.maintenanceDate)}</Text>
+                    </View>
+                    <InfoRow
+                      label="Teknisi"
+                      value={record.technician?.fullName ?? 'Tidak dicatat'}
                     />
-                    <Text style={styles.recordDate}>{formatDate(record.maintenanceDate)}</Text>
-                  </View>
-                  <InfoRow
-                    label="Teknisi"
-                    value={record.technician?.fullName ?? 'Tidak dicatat'}
-                  />
-                  <InfoRow label="Hasil" value={record.result ?? '-'} />
-                  {record.description ? (
-                    <Text style={styles.recordDescription}>{record.description}</Text>
-                  ) : null}
-                  <View style={styles.recordFooter}>
-                    <Text style={styles.recordMeta}>Biaya: {formatCurrency(record.cost)}</Text>
-                    {record.nextSchedule ? (
-                      <Text style={styles.recordMeta}>
-                        Jadwal berikutnya: {formatDate(record.nextSchedule)}
-                      </Text>
+                    <InfoRow label="Hasil" value={record.result ?? '-'} />
+                    {record.description ? (
+                      <Text style={styles.recordDescription}>{record.description}</Text>
                     ) : null}
-                  </View>
-                </Card>
+                    <View style={styles.recordFooter}>
+                      <Text style={styles.recordMeta}>Biaya: {formatCurrency(record.cost)}</Text>
+                      {record.nextSchedule ? (
+                        <Text style={styles.recordMeta}>
+                          Jadwal berikutnya: {formatDate(record.nextSchedule)}
+                        </Text>
+                      ) : null}
+                      <View style={styles.recordLinkRow}>
+                        <Text style={styles.recordLink}>Lihat detail catatan</Text>
+                        <Ionicons color={colors.accent} name="chevron-forward" size={14} />
+                      </View>
+                    </View>
+                  </Card>
+                </Pressable>
               ))
             )}
           </View>
@@ -374,6 +410,11 @@ export default function AssetDetailScreen() {
           prediction ? (
             <View style={styles.sectionList}>
               <Card title="Prediksi Risiko Aktif">
+                {predictNotice ? (
+                  <View style={styles.predictNotice}>
+                    <Text style={styles.predictNoticeText}>{predictNotice}</Text>
+                  </View>
+                ) : null}
                 <View style={styles.scoreRow}>
                   <Text style={[styles.score, { color: SCORE_COLORS[prediction.riskLevel] }]}>
                     {prediction.riskScore.toFixed(1)}
@@ -417,6 +458,16 @@ export default function AssetDetailScreen() {
                   Skor dihitung oleh mesin heuristik berbasis aturan dan statistik, bukan model
                   machine learning yang dilatih.
                 </Text>
+
+                {isAdmin ? (
+                  <Button
+                    label="Prediksi ulang"
+                    loading={predicting}
+                    onPress={handlePredict}
+                    style={styles.predictButton}
+                    variant="secondary"
+                  />
+                ) : null}
               </Card>
 
               <Card
@@ -486,23 +537,24 @@ export default function AssetDetailScreen() {
                 message="Prediksi risiko akan tampil di sini setelah administrator menjalankan analisis."
                 title="Belum ada prediksi"
               />
+              {isAdmin ? (
+                <>
+                  {predictNotice ? (
+                    <Text style={styles.predictNoticeText}>{predictNotice}</Text>
+                  ) : null}
+                  <Button
+                    label="Prediksi sekarang"
+                    loading={predicting}
+                    onPress={handlePredict}
+                    style={styles.predictButton}
+                  />
+                </>
+              ) : null}
             </Card>
           )
         ) : null}
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function ScreenHeader({ onBack }: { onBack: () => void }) {
-  return (
-    <View style={styles.screenHeader}>
-      <Pressable accessibilityRole="button" onPress={onBack} style={styles.backButton}>
-        <Ionicons color={colors.text} name="arrow-back" size={22} />
-      </Pressable>
-      <Text style={styles.screenTitle}>Detail Aset</Text>
-      <View style={styles.backButton} />
-    </View>
   );
 }
 
@@ -742,5 +794,33 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontSize: typography.small,
     lineHeight: 18,
+  },
+  pressedCard: {
+    opacity: 0.85,
+  },
+  recordLinkRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 2,
+    marginTop: spacing.xs,
+  },
+  recordLink: {
+    color: colors.accent,
+    fontSize: typography.small,
+    fontWeight: '600',
+  },
+  predictNotice: {
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.sm,
+    marginBottom: spacing.md,
+    padding: spacing.sm,
+  },
+  predictNoticeText: {
+    color: colors.accent,
+    fontSize: typography.small,
+    lineHeight: 18,
+  },
+  predictButton: {
+    marginTop: spacing.md,
   },
 });

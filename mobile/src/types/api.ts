@@ -113,7 +113,65 @@ export interface MaintenanceRecord {
   nextSchedule: string | null;
   createdAt: string;
   updatedAt: string;
+  asset?: { id: number; assetCode: string; assetName: string } | null;
   technician: { id: number; username: string; fullName: string } | null;
+}
+
+export interface NetworkRecord {
+  id: number;
+  assetId: number;
+  hostname: string | null;
+  ipAddress: string | null;
+  subnetMask: string | null;
+  gateway: string | null;
+  macAddress: string | null;
+  connectionStatus: ConnectionStatus;
+  lastChecked: string | null;
+  notes: string | null;
+  asset: { id: number; assetCode: string; assetName: string };
+}
+
+export type NotificationType = 'AI_ALERT' | 'MAINTENANCE_REMINDER' | 'SYSTEM' | 'INFO';
+
+export interface AppNotification {
+  id: number;
+  type: NotificationType;
+  title: string;
+  message: string;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
+  assetId: number | null;
+  predictionId: number | null;
+  asset: { id: number; assetCode: string; assetName: string } | null;
+}
+
+export interface PredictionResult {
+  id: number;
+  assetId: number;
+  assetCode?: string;
+  assetName?: string;
+  riskScore: number;
+  riskLevel: RiskLevel;
+  confidence: number | null;
+  predictedFailureDays: number | null;
+  topFactors?: TopFactor[];
+  recommendation: string | null;
+  shortSummary?: string;
+  explanation?: string;
+  modelVersion: string;
+  predictedAt: string;
+  isActive: boolean;
+  alertsCreated: number;
+}
+
+export interface BatchPredictionResult {
+  processed: number;
+  high: number;
+  medium: number;
+  low: number;
+  alertsCreated: number;
+  failed: Array<{ assetId: number; message: string }>;
 }
 
 export interface Pagination {

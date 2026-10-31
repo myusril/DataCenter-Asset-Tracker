@@ -18,6 +18,7 @@ import { fetchAssets } from '../../api/assets';
 import { extractErrorMessage } from '../../api/client';
 import { AssetCard } from '../../components/AssetCard';
 import { Button } from '../../components/Button';
+import { Chip } from '../../components/Chip';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
 import { Loading } from '../../components/Loading';
@@ -169,7 +170,7 @@ export default function AssetsScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.chipRow}>
             {TYPE_OPTIONS.map((option) => (
-              <FilterChip
+              <Chip
                 active={typeFilter === option.value}
                 key={option.label}
                 label={option.label}
@@ -183,7 +184,7 @@ export default function AssetsScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={styles.chipRow}>
             {STATUS_OPTIONS.map((option) => (
-              <FilterChip
+              <Chip
                 active={statusFilter === option.value}
                 key={option.label}
                 label={option.label}
@@ -254,29 +255,6 @@ export default function AssetsScreen() {
   );
 }
 
-function FilterChip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
-      onPress={onPress}
-      style={[styles.chip, active ? styles.chipActive : null]}
-    >
-      <Text style={[styles.chipLabel, active ? styles.chipLabelActive : null]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 function Separator() {
   return <View style={styles.separator} />;
 }
@@ -332,27 +310,6 @@ const styles = StyleSheet.create({
   chipRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-  },
-  chip: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-  },
-  chipActive: {
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accent,
-  },
-  chipLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    fontWeight: '500',
-  },
-  chipLabelActive: {
-    color: colors.accent,
-    fontWeight: '600',
   },
   listContent: {
     padding: spacing.lg,

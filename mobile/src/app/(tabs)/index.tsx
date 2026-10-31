@@ -191,22 +191,26 @@ export default function DashboardScreen() {
 
             <Text style={styles.sectionTitle}>Akses Cepat</Text>
             <View style={styles.quickLinks}>
-              <Pressable
-                accessibilityRole="button"
+              <QuickLink
+                icon="cube-outline"
+                label="Semua Aset"
                 onPress={() => router.push('/(tabs)/assets')}
-                style={({ pressed }) => [styles.quickLink, pressed ? styles.pressed : null]}
-              >
-                <Ionicons color={colors.accent} name="cube-outline" size={20} />
-                <Text style={styles.quickLinkText}>Semua Aset</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
+              />
+              <QuickLink
+                icon="construct-outline"
+                label="Maintenance"
+                onPress={() => router.push('/maintenance')}
+              />
+              <QuickLink
+                icon="wifi-outline"
+                label="Jaringan"
+                onPress={() => router.push('/network')}
+              />
+              <QuickLink
+                icon="person-outline"
+                label="Profil Saya"
                 onPress={() => router.push('/(tabs)/profile')}
-                style={({ pressed }) => [styles.quickLink, pressed ? styles.pressed : null]}
-              >
-                <Ionicons color={colors.accent} name="person-outline" size={20} />
-                <Text style={styles.quickLinkText}>Profil Saya</Text>
-              </Pressable>
+              />
             </View>
 
             {error ? (
@@ -218,6 +222,27 @@ export default function DashboardScreen() {
         ) : null}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function QuickLink({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.quickLink, pressed ? styles.pressed : null]}
+    >
+      <Ionicons color={colors.accent} name={icon} size={20} />
+      <Text style={styles.quickLinkText}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -347,6 +372,7 @@ const styles = StyleSheet.create({
   },
   quickLinks: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.md,
   },
   quickLink: {
@@ -355,11 +381,11 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.md,
     borderWidth: 1,
-    flex: 1,
     flexDirection: 'row',
     gap: spacing.sm,
     justifyContent: 'center',
     paddingVertical: spacing.lg,
+    width: '48%',
   },
   quickLinkText: {
     color: colors.text,

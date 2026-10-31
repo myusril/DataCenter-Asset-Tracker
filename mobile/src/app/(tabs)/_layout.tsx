@@ -45,6 +45,24 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="ai"
+        options={{
+          title: 'AI',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons color={typeof color === 'string' ? color : colors.muted} name="sparkles-outline" size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: 'Notifikasi',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons color={typeof color === 'string' ? color : colors.muted} name="notifications-outline" size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profil',
