@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -13,16 +13,18 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { fetchRiskExplanation, predictAssetRisk } from '../../../api/ai';
-import { fetchAssetDetail } from '../../../api/assets';
+import { deleteAsset, describeAssetError, fetchAssetDetail } from '../../../api/assets';
 import { extractErrorMessage } from '../../../api/client';
 import { fetchAssetMaintenance } from '../../../api/maintenance';
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { EmptyState } from '../../../components/EmptyState';
 import { Loading } from '../../../components/Loading';
 import { ScreenHeader } from '../../../components/ScreenHeader';
 import { StatusPill } from '../../../components/StatusPill';
 import { useIsAdmin } from '../../../hooks/useIsAdmin';
+import { useNotificationStore } from '../../../store/notifications';
 import { colors } from '../../../theme/colors';
 import { radius, spacing, typography } from '../../../theme/spacing';
 import type {
@@ -82,6 +84,7 @@ const FACTOR_LABELS: Record<string, string> = {
 export default function AssetDetailScreen() {
   const router = useRouter();
   const isAdmin = useIsAdmin();
+  const refreshUnread = useNotificationStore((state) => state.refreshUnread);
   const { id } = useLocalSearchParams<{ id: string }>();
   const assetId = Number(id);
 
@@ -95,6 +98,9 @@ export default function AssetDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [predicting, setPredicting] = useState(false);
   const [predictNotice, setPredictNotice] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const requestId = useRef(0);
   const scrollRef = useRef<ScrollViewInstance>(null);
 
@@ -147,9 +153,11 @@ export default function AssetDetailScreen() {
     [assetId],
   );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
 
   function selectTab(nextTab: TabKey) {
     setTab(nextTab);
@@ -162,6 +170,23 @@ export default function AssetDetailScreen() {
       return;
     }
     router.replace('/(tabs)/assets');
+  }
+
+  async function handleDelete() {
+    if (deleting) {
+      return;
+    }
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAsset(assetId);
+      setConfirmingDelete(false);
+      router.replace('/(tabs)/assets');
+    } catch (caught) {
+      setDeleteError(describeAssetError(caught));
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function handlePredict() {
@@ -177,6 +202,7 @@ export default function AssetDetailScreen() {
           `${result.alertsCreated > 0 ? ` · ${result.alertsCreated} alert dibuat` : ''}.`,
       );
       await load(true);
+      await refreshUnread();
     } catch (caught) {
       setPredictNotice(`Gagal memperbarui prediksi: ${extractErrorMessage(caught)}`);
     } finally {
@@ -215,7 +241,22 @@ export default function AssetDetailScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
-      <ScreenHeader onBack={goBack} title="Detail Aset" />
+      <ScreenHeader
+        onBack={goBack}
+        right={
+          isAdmin ? (
+            <Pressable
+              accessibilityLabel="Ubah aset"
+              accessibilityRole="button"
+              onPress={() => router.push(`/asset/${assetId}/edit`)}
+              style={styles.headerAction}
+            >
+              <Ionicons color={colors.accent} name="create-outline" size={20} />
+            </Pressable>
+          ) : undefined
+        }
+        title="Detail Aset"
+      />
       <ScrollView
         contentContainerStyle={styles.content}
         ref={scrollRef}
@@ -312,6 +353,29 @@ export default function AssetDetailScreen() {
                 {asset.description ?? 'Belum ada deskripsi untuk aset ini.'}
               </Text>
             </Card>
+
+            {isAdmin ? (
+              <Card title="Kelola aset">
+                <Text style={styles.bodyText}>
+                  Perubahan data aset, lokasi, dan jaringan dilakukan dari formulir ubah aset.
+                </Text>
+                <Button
+                  label="Ubah data aset"
+                  onPress={() => router.push(`/asset/${asset.id}/edit`)}
+                  style={styles.manageButton}
+                  variant="secondary"
+                />
+                <Button
+                  label="Hapus aset"
+                  onPress={() => {
+                    setDeleteError(null);
+                    setConfirmingDelete(true);
+                  }}
+                  style={styles.manageButton}
+                  variant="danger"
+                />
+              </Card>
+            ) : null}
           </>
         ) : null}
 
@@ -346,6 +410,13 @@ export default function AssetDetailScreen() {
 
         {tab === 'maintenance' ? (
           <View style={styles.sectionList}>
+            {isAdmin ? (
+              <Button
+                label="Catat Maintenance"
+                onPress={() => router.push(`/maintenance/new?assetId=${asset.id}`)}
+                variant="secondary"
+              />
+            ) : null}
             {maintenanceError ? (
               <Card title="Gagal memuat riwayat">
                 <Text style={styles.bodyText}>{maintenanceError}</Text>
@@ -554,6 +625,24 @@ export default function AssetDetailScreen() {
           )
         ) : null}
       </ScrollView>
+
+      <ConfirmDialog
+        busy={deleting}
+        confirmLabel="Hapus"
+        message={
+          deleteError ??
+          `Aset ${asset.assetCode} — ${asset.assetName} akan dihapus permanen. Aset yang sudah memiliki riwayat maintenance atau prediksi tidak dapat dihapus.`
+        }
+        onCancel={() => {
+          if (!deleting) {
+            setConfirmingDelete(false);
+            setDeleteError(null);
+          }
+        }}
+        onConfirm={() => void handleDelete()}
+        title={deleteError ? 'Aset tidak dapat dihapus' : 'Hapus aset?'}
+        visible={confirmingDelete}
+      />
     </SafeAreaView>
   );
 }
@@ -821,6 +910,15 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   predictButton: {
+    marginTop: spacing.md,
+  },
+  headerAction: {
+    alignItems: 'center',
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
+  manageButton: {
     marginTop: spacing.md,
   },
 });

@@ -22,6 +22,7 @@ import { Loading } from '../../components/Loading';
 import { RiskBar } from '../../components/RiskBar';
 import { StatusPill } from '../../components/StatusPill';
 import { useIsAdmin } from '../../hooks/useIsAdmin';
+import { useNotificationStore } from '../../store/notifications';
 import { colors } from '../../theme/colors';
 import { radius, spacing, typography } from '../../theme/spacing';
 import type { RiskExplanation, RiskLevel, RiskSummary } from '../../types/api';
@@ -49,6 +50,7 @@ const FACTOR_LABELS: Record<string, string> = {
 export default function AiScreen() {
   const router = useRouter();
   const isAdmin = useIsAdmin();
+  const refreshUnread = useNotificationStore((state) => state.refreshUnread);
 
   const [risk, setRisk] = useState<RiskSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -116,6 +118,7 @@ export default function AiScreen() {
           `${result.medium} sedang · ${result.low} rendah · ${result.alertsCreated} alert baru${failed}.`,
       );
       await load(true);
+      await refreshUnread();
     } catch (caught) {
       setError(extractErrorMessage(caught));
     } finally {

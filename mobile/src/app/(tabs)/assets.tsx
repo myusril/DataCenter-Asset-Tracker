@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,6 +21,7 @@ import { Button } from '../../components/Button';
 import { Chip } from '../../components/Chip';
 import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
+import { useIsAdmin } from '../../hooks/useIsAdmin';
 import { Loading } from '../../components/Loading';
 import { colors } from '../../theme/colors';
 import { radius, spacing, typography } from '../../theme/spacing';
@@ -47,6 +48,7 @@ const STATUS_OPTIONS: Array<{ value: AssetStatus | null; label: string }> = [
 
 export default function AssetsScreen() {
   const router = useRouter();
+  const isAdmin = useIsAdmin();
 
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -120,11 +122,11 @@ export default function AssetsScreen() {
     [debouncedSearch, typeFilter, statusFilter],
   );
 
-  useEffect(() => {
-    setItems([]);
-    setPagination(null);
-    void loadPage(1, 'initial');
-  }, [loadPage]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadPage(1, 'initial');
+    }, [loadPage]),
+  );
 
   function handleEndReached() {
     if (!pagination || loading || refreshing || loadingMoreRef.current) {
@@ -143,9 +145,22 @@ export default function AssetsScreen() {
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>Aset</Text>
-          <Text style={styles.count}>
-            {pagination ? `${pagination.total} aset` : 'Memuat...'}
-          </Text>
+          <View style={styles.headerActions}>
+            <Text style={styles.count}>
+              {pagination ? `${pagination.total} aset` : 'Memuat...'}
+            </Text>
+            {isAdmin ? (
+              <Pressable
+                accessibilityLabel="Tambah aset"
+                accessibilityRole="button"
+                onPress={() => router.push('/asset/new')}
+                style={({ pressed }) => [styles.addButton, pressed ? styles.addPressed : null]}
+              >
+                <Ionicons color={colors.surface} name="add" size={16} />
+                <Text style={styles.addLabel}>Aset</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
 
         <View style={styles.searchBox}>
@@ -281,6 +296,28 @@ const styles = StyleSheet.create({
   count: {
     color: colors.muted,
     fontSize: typography.caption,
+  },
+  headerActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  addButton: {
+    alignItems: 'center',
+    backgroundColor: colors.accent,
+    borderRadius: radius.sm,
+    flexDirection: 'row',
+    gap: 2,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  addPressed: {
+    opacity: 0.85,
+  },
+  addLabel: {
+    color: colors.surface,
+    fontSize: typography.small,
+    fontWeight: '700',
   },
   searchBox: {
     alignItems: 'center',

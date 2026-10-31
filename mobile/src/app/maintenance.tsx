@@ -19,6 +19,7 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
+import { useIsAdmin } from '../hooks/useIsAdmin';
 import { Loading } from '../components/Loading';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusPill } from '../components/StatusPill';
@@ -44,6 +45,7 @@ const TYPE_OPTIONS: Array<{ value: MaintenanceType | null; label: string }> = [
 
 export default function MaintenanceListScreen() {
   const router = useRouter();
+  const isAdmin = useIsAdmin();
 
   const [typeFilter, setTypeFilter] = useState<MaintenanceType | null>(null);
   const [items, setItems] = useState<MaintenanceRecord[]>([]);
@@ -122,7 +124,22 @@ export default function MaintenanceListScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
-      <ScreenHeader onBack={() => router.back()} title="Maintenance" />
+      <ScreenHeader
+        onBack={() => router.back()}
+        right={
+          isAdmin ? (
+            <Pressable
+              accessibilityLabel="Catat maintenance"
+              accessibilityRole="button"
+              onPress={() => router.push('/maintenance/new')}
+              style={styles.headerAction}
+            >
+              <Ionicons color={colors.accent} name="add-circle-outline" size={24} />
+            </Pressable>
+          ) : undefined
+        }
+        title="Maintenance"
+      />
 
       <View style={styles.filters}>
         <View style={styles.filterHeader}>
@@ -338,5 +355,11 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontSize: typography.small,
     marginBottom: spacing.md,
+  },
+  headerAction: {
+    alignItems: 'center',
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
   },
 });

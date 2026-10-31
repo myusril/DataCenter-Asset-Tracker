@@ -89,6 +89,30 @@ export function formatDateTime(value: string | null | undefined): string {
   return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()} ${hours}:${minutes}`;
 }
 
+/** Short Indonesian relative time for notification rows. */
+export function formatRelativeTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  const minutes = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (minutes < 1) {
+    return 'Baru saja';
+  }
+  if (minutes < 60) {
+    return `${minutes} menit lalu`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours} jam lalu`;
+  }
+  const days = Math.floor(hours / 24);
+  if (days < 7) {
+    return `${days} hari lalu`;
+  }
+  return formatDateTime(value);
+}
+
 export function formatCurrency(value: number | null | undefined): string {
   if (value === null || value === undefined) {
     return '-';
