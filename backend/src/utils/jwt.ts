@@ -12,6 +12,7 @@ export interface TokenPayload {
 
 export function signToken(payload: TokenPayload): string {
   const options: SignOptions = {
+    algorithm: 'HS256',
     expiresIn: env.JWT_EXPIRES_IN as SignOptions['expiresIn'],
   };
   return jwt.sign(payload, env.JWT_SECRET, options);
@@ -19,7 +20,9 @@ export function signToken(payload: TokenPayload): string {
 
 /** Verifies the signature and shape; throws when the token is unusable. */
 export function verifyToken(token: string): TokenPayload {
-  const decoded = jwt.verify(token, env.JWT_SECRET);
+  // Pin the algorithm: accepting whatever the header announces enables
+  // algorithm-confusion attacks even when the secret is strong.
+  const decoded = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] });
   if (typeof decoded === 'string') {
     throw new Error('Malformed token payload');
   }

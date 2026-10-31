@@ -141,6 +141,7 @@ npm run dev
 | `JWT_EXPIRES_IN` | Masa berlaku token, default `7d` |
 | `PORT` | Port server, default `3000` |
 | `NODE_ENV` | `development` / `test` / `production` |
+| `CORS_ORIGIN` | Opsional. Daftar origin dipisah koma; kosong = pantulkan origin request (hanya untuk lokal) |
 | `SEED_ADMIN_PASSWORD` | Password akun admin saat seed; hanya dipakai `npm run prisma:seed` |
 | `SEED_TECH_PASSWORD` | Password akun teknisi saat seed |
 

@@ -37,6 +37,7 @@ Variabel `.env` (nama saja; file `.env` tidak di-commit):
 | `JWT_EXPIRES_IN` | tidak | Default `7d` |
 | `PORT` | tidak | Default `3000` |
 | `NODE_ENV` | tidak | Default `development` |
+| `CORS_ORIGIN` | tidak | Daftar origin dipisah koma. Kosong = pantulkan origin request (lokal); isi sebelum deploy |
 | `SEED_ADMIN_PASSWORD` | untuk seed | Minimal 8 karakter; hanya dibaca `prisma db seed` |
 | `SEED_TECH_PASSWORD` | untuk seed | Minimal 8 karakter; hanya dibaca `prisma db seed` |
 
@@ -115,8 +116,9 @@ login; notifikasi milik user lain dijawab 404.
 
 ## Pengujian
 
-- **Unit test mesin risiko** (`npm test`): 2 suite, 6 test — batas level risiko, batas skor, dampak
-  kondisi memburuk, dan reproduksi contoh dokumen (SRV-001 = 83.5).
+- **Unit test mesin risiko** (`npm test`): 3 suite, 10 test — batas level risiko, batas skor, dampak
+  kondisi memburuk, reproduksi contoh dokumen (SRV-001 = 83.5), dan penolakan token dengan algoritma lain
+  (`none`, `HS512`) maupun secret yang salah.
 - **Smoke alur API**: `bash docs/scripts/smoke.sh` (dari root) menjalankan health → login → aset →
   maintenance → jaringan → prediksi → notifikasi dengan `curl`; body JSON diolah memakai `python3`
   (bukan `jq`).

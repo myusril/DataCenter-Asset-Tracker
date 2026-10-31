@@ -67,13 +67,26 @@ const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
   sendError(res, 'Internal server error', 500);
 };
 
+/**
+ * `CORS_ORIGIN` holds a comma-separated allowlist (e.g. the Expo web dev URL).
+ * When it is unset the server reflects the request origin, which keeps local
+ * development frictionless but must be configured before any deployment.
+ */
+function corsOrigin(): cors.CorsOptions['origin'] {
+  const allowlist = (env.CORS_ORIGIN ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  return allowlist.length > 0 ? allowlist : true;
+}
+
 export function createApp(): express.Express {
   const app = express();
 
   app.disable('x-powered-by');
   // Expo dev clients run from a different origin; tokens travel in headers,
-  // not cookies, so reflecting the origin is sufficient for local development.
-  app.use(cors({ origin: true, credentials: true }));
+  // not cookies, so credential sharing stays limited to the allowlisted origins.
+  app.use(cors({ origin: corsOrigin(), credentials: true }));
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 

@@ -20,7 +20,7 @@ Sudah tersedia:
 - Penyimpanan prediksi berversi (`isActive`), `explain` yang tidak menulis baris, dan 6 endpoint AI.
 - Modul notification (4 file, 7 endpoint) dengan scoping per user; prediksi HIGH membuat satu
   `AI_ALERT` untuk setiap user aktif dalam transaksi yang sama.
-- Unit test Jest mesin AI (2 suite, 6 test) dan smoke flow API di `docs/scripts/smoke.sh`.
+- Unit test Jest mesin AI + verifikasi token (3 suite, 10 test) dan smoke flow API di `docs/scripts/smoke.sh`.
 - Aplikasi mobile lengkap: login/auto-login, dashboard, daftar aset, detail aset 4 tab, maintenance
   (daftar/detail/form), jaringan (daftar + cek), tab AI (ringkasan, top 5, dialog explain, prediksi
   batch), pusat notifikasi dengan badge, form tambah/ubah/hapus aset, profil, dan role gating.

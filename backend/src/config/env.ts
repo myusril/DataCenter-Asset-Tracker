@@ -15,6 +15,9 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters long'),
   JWT_EXPIRES_IN: z.string().min(1).default('7d'),
+  // Comma-separated allowlist. Empty means "reflect the request origin",
+  // which is convenient for local Expo/web clients but not for production.
+  CORS_ORIGIN: z.string().optional(),
   SEED_ADMIN_PASSWORD: z.string().min(8).optional(),
   SEED_TECH_PASSWORD: z.string().min(8).optional(),
 });
