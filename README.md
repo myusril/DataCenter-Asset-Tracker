@@ -181,7 +181,9 @@ Backend (`cd backend`):
 |---|---|
 | `npm run dev` | Server pengembangan (`tsx watch`) |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Jest: unit test mesin risiko |
+| `npm test` | Jest: unit + integration test (butuh database test) |
+| `npm run test:coverage` | Jest + coverage, threshold 70/70/70/60 ditegakkan |
+| `npm run test:db:prepare` / `test:db:drop` | Siapkan / hapus database `datacenter_tracker_test` |
 | `npm run build` / `npm start` | Kompilasi TypeScript / jalankan hasil build |
 | `npm run prisma:generate` | Generate Prisma Client |
 | `npm run prisma:migrate` | Terapkan migrasi |
@@ -230,6 +232,8 @@ berlevel **Tinggi** membuat notifikasi `AI_ALERT` untuk setiap user aktif. Conto
 .
 ├── backend/
 │   ├── prisma/               # schema 7 tabel + seed demo
+│   ├── scripts/test-db.sh    # prepare / truncate / drop database test
+│   ├── test/support/         # helper truncate + fixture test
 │   └── src/
 │       ├── app.ts, server.ts
 │       ├── config/           # Prisma client, validasi env
@@ -266,6 +270,7 @@ bagian dokumen ke hasil yang benar-benar ada di repository.
 | §6 AI hybrid engine | 3 lapisan, contoh 83.5 HIGH | 3 lapisan seperti dijelaskan di atas; contoh SRV-001 direproduksi (69.5 + 5 + 9) |
 | §8.1 Test flow | Health, login, create asset, maintenance, predict, notifications | Dijalankan; hasil di tabel "Hasil pengujian" |
 | §8.2 Checklist | 9 baris fitur | Diisi dengan bukti pengamatan nyata (lihat tabel berikut) |
+| §11.2 TODO Production | Unit test Jest minimal 70% coverage | 10 suite / 108 test; statements 91.08%, lines 91.08%, functions 95.00%, branches 75.08% (threshold ditegakkan di `jest.config.mjs`) |
 | §12.1 Sprint 1–4 mobile | Foundation → auth → dashboard/aset → operasional/AI | 4 fase mobile selesai (dashboard, aset, detail 4 tab, maintenance, jaringan, AI, notifikasi, form admin, profil) |
 | Fase 1 Asset management (roadmap) | List, search, filter, detail, navigasi | Selesai |
 | Fase 2 Operational features | Maintenance list/detail, network screen | Selesai |
@@ -310,6 +315,24 @@ Semua baris di bawah berasal dari eksekusi nyata pada 31 Oktober 2026 di mesin p
 | AI Prediction | ✅ | SRV-001 = **83.5 Tinggi** (confidence 95, 15 hari) pada data awal; kondisi ini disiapkan `docs/scripts/smoke.sh` lewat API, bukan oleh seed. Setelah cek jaringan mengubah status menjadi Online, prediksi ulang menghasilkan **76.0 Tinggi**. Batch 9 aset pada gate akhir: **6 rendah / 2 sedang / 1 tinggi**, skor rata-rata **26.91** (SRV-004 naik ke Sedang setelah 2 catatan maintenance baru) |
 | AI Alert | ✅ | Setiap prediksi HIGH menambah satu `AI_ALERT` untuk admin dan satu untuk teknisi1. Badge admin 4 → 5 setelah batch (web); pada emulator badge 0 → 2 setelah dua kali batch, lalu 2 → 1 setelah satu alert dibaca |
 | Notification | ✅ | Mark read: badge 5 → 4 (web) dan 2 → 1 (emulator, unread count API ikut turun); "Tandai semua dibaca": 5 notifikasi, badge hilang; hapus satu: "Notifikasi dihapus."; hapus yang dibaca: 5 dihapus, empty state tampil |
+
+### Jest coverage backend (§11.2)
+
+Dijalankan dengan `npm run test:coverage` pada 31 Oktober 2026 di mesin yang sama: **10 suite,
+108 test lulus**, memakai database khusus `datacenter_tracker_test` (database demo tidak disentuh).
+
+| Metrik | Hasil terukur | Threshold |
+|---|---|---|
+| Statements | 766/841 (**91.08%**) | 70% |
+| Branches | 211/281 (**75.08%**) | 60% |
+| Functions | 171/180 (**95.00%**) | 70% |
+| Lines | 756/830 (**91.08%**) | 70% |
+
+Cakupan `src/**/*.ts` kecuali `src/server.ts`. Seluruh 37 endpoint dieksekusi lewat `supertest`,
+termasuk jalur 400/401/403/404/409, pagination, urutan, perpindahan lokasi, aturan status maintenance,
+upsert/cek jaringan, skor acuan 83.5, rotasi `isActive`, batch `failed[]`, alert HIGH hanya untuk user
+aktif, dan scoping notifikasi per user. Angka di atas adalah hasil `npm run test:coverage`, bukan
+estimasi.
 
 ### Alur aplikasi (emulator Android dan web)
 
@@ -370,8 +393,8 @@ scanner, adaptive weight, dan direktori `ai-service/`.
 
 ## Riwayat pengembangan
 
-Pengerjaan dibagi menjadi 4 fase, masing-masing pada branch fitur sendiri lalu di-merge ke `main`
-dengan `--no-ff` agar setiap fase terlihat di riwayat.
+Pengerjaan dibagi menjadi 4 fase utama, masing-masing pada branch fitur sendiri lalu di-merge ke `main`
+dengan `--no-ff` agar setiap fase terlihat di riwayat, ditambah satu brief penguatan pengujian backend.
 
 | Fase | Isi | Branch | Commit |
 |---|---|---|---|
@@ -379,5 +402,6 @@ dengan `--no-ff` agar setiap fase terlihat di riwayat.
 | 2 | Mesin risiko hibrida, notifikasi, alert HIGH, unit test | `feat/ai-engine` | `feat: add hybrid risk prediction engine`, `feat: add notification module and high-risk alerts`, `test: add ai engine unit tests and api smoke check` |
 | 3 | Mobile core: login/auto-login, dashboard, daftar aset, detail 4 tab, profil | `feat/mobile-core` | `feat: add expo router foundation and login flow`, `feat: add dashboard and asset list`, `feat: add asset detail tabs and profile screen` |
 | 4 | Layar operasional (maintenance, jaringan, AI, notifikasi), form admin, refactor require cycle, dokumentasi | `feat/mobile-ops-docs` | `feat: add maintenance, network, and ai screens`, `feat: add notification center and admin forms`, `refactor: remove auth store require cycle`, `docs: update readme and handoff for delivered scope` |
+| 5 | Penguatan pengujian backend: integration suite 37 endpoint, database test terpisah, threshold coverage, dokumentasi | `test/backend-coverage` | `test: add api integration suites`, `test: enforce coverage threshold`, `docs: document test coverage` |
 
 Detail status terakhir dan cara melanjutkan: `docs/HANDOFF.md`. Kontrak API: `docs/API_CONTRACT.md`.

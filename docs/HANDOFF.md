@@ -4,10 +4,10 @@ Dokumen ini mencatat status pekerjaan terakhir agar sesi berikutnya bisa melanju
 
 ## Status
 
-Brief 4 (layar operasional, form admin, dokumentasi) selesai pada branch `feat/mobile-ops-docs`
-(4 commit): tab Maintenance/Jaringan/AI/Notifikasi, form aset dan maintenance, refactor require cycle,
-serta dokumentasi. Backend tidak diubah pada brief ini; tetap **37 endpoint** sesuai
-`docs/API_CONTRACT.md`. Branch belum di-merge ke `main`; mahasiswa yang melakukan merge.
+Brief 5 (penguatan pengujian, di luar fase 1–4) selesai pada branch `test/backend-coverage`
+(3 commit): integration suite untuk seluruh 37 endpoint, database test terpisah, threshold coverage,
+dan dokumentasi. Backend tidak berubah perilaku; tetap **37 endpoint** sesuai `docs/API_CONTRACT.md`.
+Branch belum di-merge ke `main`; mahasiswa yang melakukan merge.
 
 Sudah tersedia:
 
@@ -20,7 +20,10 @@ Sudah tersedia:
 - Penyimpanan prediksi berversi (`isActive`), `explain` yang tidak menulis baris, dan 6 endpoint AI.
 - Modul notification (4 file, 7 endpoint) dengan scoping per user; prediksi HIGH membuat satu
   `AI_ALERT` untuk setiap user aktif dalam transaksi yang sama.
-- Unit test Jest mesin AI + verifikasi token (3 suite, 10 test) dan smoke flow API di `docs/scripts/smoke.sh`.
+- Pengujian backend: 10 suite / 108 test (`npm run test:coverage`) — unit test mesin AI + verifikasi
+  token, dan integration test HTTP untuk 37 endpoint dengan database `datacenter_tracker_test`.
+  Statements 91.08%, lines 91.08%, functions 95.00%, branches 75.08%; threshold di `jest.config.mjs`.
+  Smoke flow API tetap ada di `docs/scripts/smoke.sh`.
 - Aplikasi mobile lengkap: login/auto-login, dashboard, daftar aset, detail aset 4 tab, maintenance
   (daftar/detail/form), jaringan (daftar + cek), tab AI (ringkasan, top 5, dialog explain, prediksi
   batch), pusat notifikasi dengan badge, form tambah/ubah/hapus aset, profil, dan role gating.
@@ -80,7 +83,9 @@ Bentuk respons, status code, dan aturan tiap modul ada di `docs/API_CONTRACT.md`
 # Backend (butuh backend/.env yang tidak di-commit)
 cd backend
 npx tsc --noEmit
-npm test                    # Jest ESM; tidak membutuhkan database
+npm run test:db:prepare     # buat + migrasi + kosongkan datacenter_tracker_test
+npm run test:coverage       # 10 suite / 108 test + threshold
+npm run test:db:drop        # hapus database test
 npm run dev
 
 # Smoke alur API (backend harus berjalan)
@@ -92,6 +97,11 @@ npx tsc --noEmit
 EXPO_PUBLIC_API_URL=http://10.0.2.2:3000 npx expo start --android   # emulator
 EXPO_PUBLIC_API_URL=http://localhost:3000 npx expo start --web      # web
 ```
+
+Database test diturunkan dari `DATABASE_URL` di `backend/.env` dengan nama database diganti menjadi
+`datacenter_tracker_test` pada host/port yang sama; database demo tidak pernah dipakai test dan tidak
+diubah oleh gate (`users` 2, `assets` 9, `maintenance_history` 14, `ai_predictions` 70 sebelum dan
+sesudah). `prisma migrate deploy` dipakai untuk database test, bukan `migrate reset`.
 
 Environment variable (nama saja): `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`,
 `NODE_ENV`, `SEED_ADMIN_PASSWORD`, `SEED_TECH_PASSWORD`, dan `EXPO_PUBLIC_API_URL` untuk mobile.
@@ -111,6 +121,8 @@ Selama pengujian manual brief 4, data demo ikut berubah (ini normal, bukan bug):
   gate akhir); notifikasi admin yang sudah dibaca dihapus saat menguji aksi hapus.
 - Form tambah aset pada emulator terisi sebagian (DC-4, hostname) tetapi tidak disimpan; tidak ada
   aset uji yang tertinggal (pemeriksaan `search=TST-902` = 0).
+- Brief 5 tidak menyentuh data demo: seluruh test memakai `datacenter_tracker_test` yang dibuat dan
+  dihapus oleh script. Jumlah baris demo tetap 2 user, 9 aset, 14 maintenance, 70 prediksi.
 
 Untuk mengembalikan data demo ke kondisi seed (lokal, destruktif):
 
