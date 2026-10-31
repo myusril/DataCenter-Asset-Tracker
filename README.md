@@ -260,7 +260,7 @@ bagian dokumen ke hasil yang benar-benar ada di repository.
 | Bagian dokumen | Tuntutan | Yang dikerjakan |
 |---|---|---|
 | §3 Struktur project | Backend moduler + mobile Expo | Backend `src/modules/*` (6 modul) dan mobile di `mobile/` dengan route `src/app/...` |
-| §4 Database schema | 7 tabel + enum | 7 tabel Prisma (`users`, `assets`, `asset_locations`, `network_information`, `maintenance_history`, `ai_predictions`, `notifications`) + 6 enum |
+| §4 Database schema | 7 tabel + enum | 7 tabel Prisma (`users`, `assets`, `asset_locations`, `network_information`, `maintenance_history`, `ai_predictions`, `notifications`) + 7 enum |
 | §5 Backend modules | Auth 3, Asset 6, Maintenance 7, Network 8, AI 6, Notification 7 | Total **37 endpoint** sesuai tabel §7.1 dan `docs/API_CONTRACT.md` |
 | §6 AI hybrid engine | 3 lapisan, contoh 83.5 HIGH | 3 lapisan seperti dijelaskan di atas; contoh SRV-001 direproduksi (69.5 + 5 + 9) |
 | §8.1 Test flow | Health, login, create asset, maintenance, predict, notifications | Dijalankan; hasil di tabel "Hasil pengujian" |
@@ -288,6 +288,7 @@ bagian dokumen ke hasil yang benar-benar ada di repository.
 | 9 | Workflow hanya `main` | **Satu branch fitur per fase**, merge `--no-ff` | Brief pengerjaan bertahap; tiap fase tetap terlihat di riwayat |
 | 10 | Maintenance butuh `technicianId` | **Default user yang login** | Dokumen tidak menyediakan endpoint daftar user; dicatat sebagai batasan |
 | 11 | Registrasi anonim menerima role apa pun | User pertama boleh ADMIN; ADMIN berikutnya butuh token ADMIN | Mencegah eskalasi hak akses |
+| 12 | Skema `assets`/`maintenance_history` tidak mencantumkan timestamp | Ditambahkan `createdAt`/`updatedAt` pada `assets`, `maintenance_history`, `notifications` | `sortBy=createdAt` dan urutan list pada §5.2 membutuhkan timestamp; nilainya ikut di respons API |
 
 ## Hasil pengujian
 
