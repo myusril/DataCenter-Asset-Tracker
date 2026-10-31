@@ -3,7 +3,7 @@ export default {
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.test.ts'],
   extensionsToTreatAsEsm: ['.ts'],
-  setupFiles: ['<rootDir>/jest.setup.mjs'],
+  setupFiles: ['<rootDir>/jest.setup.cjs'],
   // Every suite shares the dedicated test database and truncates it between
   // tests, so the files must not run in parallel.
   maxWorkers: 1,

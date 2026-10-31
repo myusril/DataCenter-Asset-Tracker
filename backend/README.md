@@ -97,7 +97,7 @@ backend/
 │   │   └── notification/    # 4 file
 │   └── utils/               # jwt, password, response, logger, serialize, validation
 ├── jest.config.mjs
-├── jest.setup.mjs
+├── jest.setup.cjs
 ├── scripts/test-db.sh       # prepare / truncate / drop database test
 ├── test/support/            # helper truncate + fixture (di luar cakupan coverage)
 └── tsconfig.json
@@ -134,7 +134,7 @@ Jest berjalan sebagai ESM (`NODE_OPTIONS=--experimental-vm-modules`) dengan dua 
 Test tidak pernah memakai database demo. `npm run test:db:prepare` membuat database
 `datacenter_tracker_test` pada host/port yang sama dengan `DATABASE_URL` di `backend/.env` (hanya nama
 database yang diganti), menjalankan `prisma migrate deploy` (bukan `migrate reset`), lalu mengosongkan
-tabel. `jest.setup.mjs` mengarahkan `DATABASE_URL` proses Jest ke database itu, dan setiap suite
+tabel. `jest.setup.cjs` mengarahkan `DATABASE_URL` proses Jest ke database itu, dan setiap suite
 melakukan `TRUNCATE` sebelum test. Setelah selesai, `npm run test:db:drop` menghapusnya.
 
 | Perintah | Fungsi |

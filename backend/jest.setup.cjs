@@ -1,17 +1,20 @@
 // Runs before every test file. Points Prisma at the dedicated test database so
 // no suite can ever touch the development database named in backend/.env.
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+//
+// This file is CommonJS on purpose: Jest loads `setupFiles` before the TS/ESM
+// transform, so an ESM `.mjs` setup file fails with "Cannot use import
+// statement outside a module" and every suite aborts before running.
+const { readFileSync } = require('node:fs');
+const { resolve } = require('node:path');
 
 process.env.NODE_ENV = 'test';
 
-// Parse backend/.env directly: Jest's sandboxed `process` does not always
-// expose `loadEnvFile`. DATABASE_URL always comes from this file so it cannot
-// diverge from the URL that scripts/test-db.sh prepares.
+// Parse backend/.env directly: Jest's sandboxed `process` does not expose
+// `loadEnvFile`. DATABASE_URL always comes from this file so it cannot diverge
+// from the URL that scripts/test-db.sh prepares.
 let envFile;
 try {
-  envFile = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '.env'), 'utf8');
+  envFile = readFileSync(resolve(__dirname, '.env'), 'utf8');
 } catch {
   throw new Error(
     'backend/.env is required for tests. Copy backend/.env.example to backend/.env, ' +
