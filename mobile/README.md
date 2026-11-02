@@ -109,7 +109,8 @@ export ANDROID_HOME=$HOME/Library/Android/sdk
 export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
 
 cd mobile
-EXPO_PUBLIC_API_URL=<alamat-api> npx expo prebuild --platform android --no-install
+export EXPO_PUBLIC_API_URL=<alamat-api>        # must stay exported for Gradle too
+npx expo prebuild --platform android --no-install
 cd android && ./gradlew assembleRelease
 
 ls -lh app/build/outputs/apk/release/app-release.apk
@@ -131,6 +132,16 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 Tanpa Metro, APK debug berhenti di "Unable to load script".
+
+Catatan penting: `EXPO_PUBLIC_API_URL` dibaca saat Gradle membundel JavaScript, bukan hanya saat
+`prebuild`. Kalau nilainya diubah setelah build sebelumnya, paksa bundel ulang:
+
+```bash
+export EXPO_PUBLIC_API_URL=<alamat-api>
+cd mobile/android
+./gradlew :app:createBundleReleaseJsAndAssets --rerun-tasks
+./gradlew assembleRelease
+```
 
 Catatan:
 
