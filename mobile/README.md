@@ -87,6 +87,59 @@ bila variabel tidak diisi, dan tidak ada alamat IP yang ditulis di dalam kode.
 
 File `.env` tidak di-commit; hanya `.env.example` yang masuk repositori.
 
+## Build APK (Android, lokal)
+
+APK dibangun langsung dengan Gradle di mesin pengembang; tidak memakai EAS, akun Expo, atau
+unggahan ke toko aplikasi.
+
+Prasyarat: JDK 17 dan Android SDK dengan build-tools 36.1.0. Isi `JAVA_HOME` dan `ANDROID_HOME` sesuai
+lokasi instalasi di mesin Anda. Alamat API diberikan saat build lewat `EXPO_PUBLIC_API_URL` (lihat
+bagian "Konfigurasi alamat API"); nilainya ditanam ke dalam bundel, jadi mengganti alamat berarti
+build ulang dan alamat sungguhan tidak boleh ditulis ke file yang di-commit.
+
+### APK release — default untuk uji di HP
+
+APK release menanam JavaScript di dalam APK, sehingga aplikasi berjalan tanpa Metro, tanpa kabel, dan
+tanpa dev server. Template Expo menandatanganinya dengan debug keystore: cukup untuk uji coba di
+perangkat sendiri, bukan untuk toko aplikasi.
+
+```bash
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home
+export ANDROID_HOME=$HOME/Library/Android/sdk
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+
+cd mobile
+EXPO_PUBLIC_API_URL=<alamat-api> npx expo prebuild --platform android --no-install
+cd android && ./gradlew assembleRelease
+
+ls -lh app/build/outputs/apk/release/app-release.apk
+adb install -r app/build/outputs/apk/release/app-release.apk
+```
+
+### APK debug — hanya untuk pengembangan
+
+APK debug tidak menanam JavaScript; aplikasi membacanya dari Metro saat runtime. Jalankan Metro dan
+teruskan port 8081 ke perangkat sebelum membuka aplikasi:
+
+```bash
+cd mobile
+EXPO_PUBLIC_API_URL=<alamat-api> npx expo start
+
+adb reverse tcp:8081 tcp:8081
+cd android && ./gradlew assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+Tanpa Metro, APK debug berhenti di "Unable to load script".
+
+Catatan:
+
+- `android/` adalah hasil generate `expo prebuild` dan tidak di-commit (lihat `.gitignore`). Jalankan
+  ulang `expo prebuild` setelah mengubah konfigurasi di `app.json`.
+- ID aplikasi Android ada di `expo.android.package` (`com.datacentertracker.app`); ganti sebelum
+  publikasi ke toko aplikasi.
+- Kedua jenis APK ditandatangani dengan debug keystore; jangan dipakai untuk distribusi publik.
+
 ## Struktur
 
 ```
