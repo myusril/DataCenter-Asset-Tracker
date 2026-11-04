@@ -4,8 +4,8 @@ Aplikasi inventaris dan asset tracking data center untuk teknisi dan administrat
 (server, switch, router, storage, firewall, rack), riwayat lokasi, informasi jaringan, riwayat
 maintenance, serta prediksi risiko untuk preventive maintenance.
 
-- Backend: REST API **Express 5 + TypeScript + Prisma 6.19.3 + PostgreSQL 16**, 39 endpoint
-  (37 dari dokumen + 2 ekstensi jadwal/pengingat maintenance), 7 tabel.
+- Backend: REST API **Express 5 + TypeScript + Prisma 6.19.3 + PostgreSQL 16**, 40 endpoint
+  (37 dari dokumen + 3 ekstensi: jadwal/pengingat maintenance dan profil sendiri), 7 tabel.
 - Mobile: aplikasi **Expo SDK 58 / React Native 0.88** (Expo Router, Zustand, axios) untuk Android
   (HP fisik) dan web.
 - Mesin risiko: **heuristik deterministik 3 lapisan** (aturan berbobot + statistik + pencocokan pola),
@@ -80,7 +80,7 @@ lengkap ada di bagian [Riwayat pengembangan](#riwayat-pengembangan).
 ```
 ┌──────────────────────────┐        HTTP/JSON        ┌───────────────────────────┐
 │  Mobile (Expo SDK 58)    │  Authorization: Bearer  │  Backend (Express 5, TS)  │
-│  Expo Router + Zustand   │ ──────────────────────> │  39 endpoint REST         │
+│  Expo Router + Zustand   │ ──────────────────────> │  40 endpoint REST         │
 │  axios + AsyncStorage    │ <────────────────────── │  JWT + bcrypt + Zod       │
 └──────────────────────────┘                         └─────────────┬─────────────┘
                                                                    │ Prisma 6.19.3
@@ -260,7 +260,7 @@ berlevel **Tinggi** membuat notifikasi `AI_ALERT` untuk setiap user aktif. Conto
 │   │   └── utils/            # format tanggal/angka, warna pill
 │   └── README.md
 └── docs/
-    ├── API_CONTRACT.md       # kontrak 39 endpoint (37 dokumen + 2 ekstensi)
+    ├── API_CONTRACT.md       # kontrak 40 endpoint (37 dokumen + 3 ekstensi)
     ├── HANDOFF.md            # status & cara melanjutkan
     └── scripts/smoke.sh      # smoke test alur API
 ```
@@ -274,7 +274,7 @@ bagian dokumen ke hasil yang benar-benar ada di repository.
 |---|---|---|
 | §3 Struktur project | Backend moduler + mobile Expo | Backend `src/modules/*` (6 modul) dan mobile di `mobile/` dengan route `src/app/...` |
 | §4 Database schema | 7 tabel + enum | 7 tabel Prisma (`users`, `assets`, `asset_locations`, `network_information`, `maintenance_history`, `ai_predictions`, `notifications`) + 7 enum |
-| §5 Backend modules | Auth 3, Asset 6, Maintenance 7, Network 8, AI 6, Notification 7 | **39 endpoint** = 37 sesuai tabel §7.1 + 2 ekstensi jadwal/pengingat maintenance (`docs/API_CONTRACT.md`) |
+| §5 Backend modules | Auth 3, Asset 6, Maintenance 7, Network 8, AI 6, Notification 7 | **40 endpoint** = 37 sesuai tabel §7.1 + 3 ekstensi: jadwal/pengingat maintenance dan `PATCH /api/users/me` (`docs/API_CONTRACT.md`) |
 | §6 AI hybrid engine | 3 lapisan, contoh 83.5 HIGH | 3 lapisan seperti dijelaskan di atas; contoh SRV-001 direproduksi (69.5 + 5 + 9) |
 | §8.1 Test flow | Health, login, create asset, maintenance, predict, notifications | Dijalankan; hasil di tabel "Hasil pengujian" |
 | §8.2 Checklist | 9 baris fitur | Diisi dengan bukti pengamatan nyata (lihat tabel berikut) |
