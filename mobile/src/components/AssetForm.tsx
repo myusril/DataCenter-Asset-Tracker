@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { AssetWritePayload } from '../api/assets';
 import { colors } from '../theme/colors';
-import { spacing, typography } from '../theme/spacing';
+import { radius, spacing } from '../theme/spacing';
+import { text } from '../theme/typography';
 import type {
   AssetDetail,
   AssetStatus,
@@ -393,7 +395,8 @@ export function AssetForm({
     >
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {error ? (
-          <View style={styles.errorBox}>
+          <View accessibilityRole="alert" style={styles.errorBox}>
+            <Ionicons color={colors.dangerInk} name="alert-circle" size={18} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -609,23 +612,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    gap: spacing.md,
-    padding: spacing.lg,
-    paddingBottom: spacing.xxxl,
+    gap: spacing.lg,
+    padding: spacing.xl,
+    paddingBottom: spacing.huge,
   },
   errorBox: {
+    alignItems: 'flex-start',
     backgroundColor: colors.dangerSoft,
-    borderRadius: 8,
+    borderRadius: radius.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
     padding: spacing.md,
   },
   errorText: {
-    color: colors.danger,
-    fontSize: typography.small,
-    lineHeight: 18,
+    ...text.caption,
+    color: colors.dangerInk,
+    flex: 1,
   },
   editNote: {
-    color: colors.muted,
-    fontSize: typography.small,
-    lineHeight: 18,
+    ...text.small,
+    paddingHorizontal: spacing.xs,
   },
 });

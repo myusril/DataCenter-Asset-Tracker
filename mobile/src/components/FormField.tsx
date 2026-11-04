@@ -8,7 +8,9 @@ import {
 } from 'react-native';
 
 import { colors } from '../theme/colors';
-import { radius, spacing, typography } from '../theme/spacing';
+import { radius, spacing } from '../theme/spacing';
+import { elevation } from '../theme/tokens';
+import { text } from '../theme/typography';
 import { Chip } from './Chip';
 
 interface FormFieldProps {
@@ -101,51 +103,50 @@ export function FormSection({ title, children }: { title: string; children: Reac
 
 const styles = StyleSheet.create({
   section: {
+    ...elevation.card,
     backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     gap: spacing.md,
     padding: spacing.lg,
   },
   sectionTitle: {
-    color: colors.text,
-    fontSize: typography.heading,
-    fontWeight: '700',
+    ...text.heading,
   },
   field: {
     gap: 4,
   },
   label: {
+    ...text.captionStrong,
     color: colors.textSecondary,
-    fontSize: typography.small,
-    fontWeight: '600',
   },
   input: {
-    backgroundColor: colors.background,
+    ...text.body,
+    backgroundColor: colors.mutedSurface,
     borderColor: colors.border,
     borderRadius: radius.sm,
     borderWidth: 1,
     color: colors.text,
-    fontSize: typography.caption,
-    minHeight: 44,
+    minHeight: 48,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
   },
   inputMultiline: {
-    minHeight: 88,
+    minHeight: 96,
+    paddingTop: spacing.md,
     textAlignVertical: 'top',
   },
   inputError: {
+    backgroundColor: colors.dangerSoft,
     borderColor: colors.danger,
   },
   error: {
-    color: colors.danger,
-    fontSize: typography.small,
+    ...text.small,
+    color: colors.dangerInk,
   },
   hint: {
-    color: colors.muted,
-    fontSize: 11,
+    ...text.small,
   },
   chips: {
     flexDirection: 'row',

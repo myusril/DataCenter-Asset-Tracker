@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -22,12 +22,16 @@ import { createMaintenanceRecord } from '../../api/maintenance';
 import { AccessDenied } from '../../components/AccessDenied';
 import { Button } from '../../components/Button';
 import { FormField, FormSection, SelectField } from '../../components/FormField';
-import { ScreenHeader } from '../../components/ScreenHeader';
+import { GradientHeader } from '../../components/GradientHeader';
+import { IconButton } from '../../components/IconButton';
+import { Skeleton } from '../../components/Skeleton';
 import { StatusPill } from '../../components/StatusPill';
 import { useIsAdmin } from '../../hooks/useIsAdmin';
 import { useAuthStore } from '../../store/auth';
 import { colors } from '../../theme/colors';
-import { radius, spacing, typography } from '../../theme/spacing';
+import { radius, spacing } from '../../theme/spacing';
+import { elevation, layout } from '../../theme/tokens';
+import { text } from '../../theme/typography';
 import type { Asset, MaintenanceType } from '../../types/api';
 import { ASSET_STATUS_LABELS, ASSET_TYPE_LABELS, MAINTENANCE_TYPE_LABELS } from '../../utils/format';
 import { ASSET_STATUS_TONES } from '../../utils/pills';
@@ -142,49 +146,95 @@ export default function NewMaintenanceScreen() {
 
   if (!isAdmin) {
     return (
-      <SafeAreaView edges={['top']} style={styles.safe}>
-        <ScreenHeader onBack={() => router.back()} title="Catat Maintenance" />
+      <SafeAreaView edges={[]} style={styles.safe}>
+        <StatusBar style="light" />
+        <GradientHeader
+          eyebrow="Riwayat perawatan"
+          left={
+            <IconButton
+              accessibilityLabel="Kembali"
+              icon="arrow-back"
+              onPress={() => router.back()}
+              tone="glass"
+            />
+          }
+          subtitle="Formulir ini hanya untuk administrator."
+          title="Catat Maintenance"
+          variant="compact"
+        />
         <AccessDenied />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView edges={['top']} style={styles.safe}>
-      <ScreenHeader onBack={() => router.back()} title="Catat Maintenance" />
+    <SafeAreaView edges={[]} style={styles.safe}>
+      <StatusBar style="light" />
+      <GradientHeader
+        eyebrow="Riwayat perawatan"
+        left={
+          <IconButton
+            accessibilityLabel="Kembali"
+            icon="arrow-back"
+            onPress={() => router.back()}
+            tone="glass"
+          />
+        }
+        subtitle="Lengkapi pekerjaan, biaya, dan hasil perawatan."
+        title="Catat Maintenance"
+        variant="compact"
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
       >
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {submitError ? (
-            <View style={styles.errorBox}>
+            <View accessibilityRole="alert" style={styles.errorBox}>
+              <Ionicons color={colors.dangerInk} name="alert-circle" size={18} />
               <Text style={styles.errorText}>{submitError}</Text>
             </View>
           ) : null}
 
           <FormSection title="Aset">
-            <Text style={styles.label}>Aset yang dirawat *</Text>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setPickerVisible(true)}
-              style={({ pressed }) => [styles.picker, pressed ? styles.pressed : null]}
-            >
-              {asset ? (
-                <View style={styles.pickerBody}>
-                  <Text style={styles.pickerName}>{asset.assetName}</Text>
-                  <Text style={styles.pickerCode}>{asset.assetCode}</Text>
-                </View>
-              ) : (
-                <Text style={styles.pickerPlaceholder}>Pilih aset...</Text>
-              )}
-              <Ionicons color={colors.muted} name="chevron-down" size={18} />
-            </Pressable>
-            {errors.asset ? <Text style={styles.fieldError}>{errors.asset}</Text> : null}
-            <Text style={styles.hint}>
-              Teknisi tercatat otomatis: {user?.fullName ?? 'pengguna yang login'}. Dokumen sumber
-              tidak menyediakan endpoint daftar user, jadi nama teknisi tidak dapat dipilih.
-            </Text>
+            <View style={styles.field}>
+              <Text style={styles.label}>Aset yang dirawat *</Text>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setPickerVisible(true)}
+                style={({ pressed }) => [
+                  styles.picker,
+                  errors.asset ? styles.pickerError : null,
+                  pressed ? styles.pressed : null,
+                ]}
+              >
+                {asset ? (
+                  <View style={styles.pickerContent}>
+                    <View style={styles.pickerIcon}>
+                      <Ionicons color={colors.primary} name="cube-outline" size={16} />
+                    </View>
+                    <View style={styles.pickerText}>
+                      <Text numberOfLines={1} style={styles.pickerName}>
+                        {asset.assetName}
+                      </Text>
+                      <Text style={styles.pickerCode}>{asset.assetCode}</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={styles.pickerPlaceholder}>Pilih aset...</Text>
+                )}
+                <Ionicons color={colors.muted} name="chevron-down" size={18} />
+              </Pressable>
+              {errors.asset ? <Text style={styles.fieldError}>{errors.asset}</Text> : null}
+              <Text style={styles.hint}>
+                Teknisi tercatat otomatis: {user?.fullName ?? 'pengguna yang login'}. Dokumen sumber
+                tidak menyediakan endpoint daftar user, jadi nama teknisi tidak dapat dipilih.
+              </Text>
+            </View>
           </FormSection>
 
           <FormSection title="Pekerjaan">
@@ -243,12 +293,20 @@ export default function NewMaintenanceScreen() {
             />
           </FormSection>
 
-          <Text style={styles.ruleNote}>
-            Jenis Perbaikan, Upgrade, atau Penggantian membuat status aset menjadi Maintenance.
-            Hasil yang diawali &quot;Resolved&quot; mengembalikan status menjadi Aktif.
-          </Text>
+          <View style={styles.ruleNote}>
+            <Ionicons color={colors.primary} name="information-circle-outline" size={18} />
+            <Text style={styles.ruleNoteText}>
+              Jenis Perbaikan, Upgrade, atau Penggantian membuat status aset menjadi Maintenance.
+              Hasil yang diawali &quot;Resolved&quot; mengembalikan status menjadi Aktif.
+            </Text>
+          </View>
 
-          <Button label="Simpan catatan" loading={submitting} onPress={handleSubmit} />
+          <Button
+            icon="save-outline"
+            label="Simpan catatan"
+            loading={submitting}
+            onPress={handleSubmit}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -309,21 +367,30 @@ function AssetPicker({
     <Modal animationType="slide" onRequestClose={onClose} transparent visible={visible}>
       <View style={styles.overlay}>
         <View style={styles.modalCard}>
+          <View style={styles.modalHandle} />
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Pilih aset</Text>
-            <Pressable accessibilityLabel="Tutup" accessibilityRole="button" onPress={onClose}>
-              <Ionicons color={colors.muted} name="close" size={22} />
-            </Pressable>
+            <View style={styles.modalTitleBlock}>
+              <Text style={styles.modalTitle}>Pilih aset</Text>
+              <Text style={styles.modalSubtitle}>Cari berdasarkan kode atau nama aset.</Text>
+            </View>
+            <IconButton
+              accessibilityLabel="Tutup"
+              icon="close"
+              onPress={onClose}
+              size="sm"
+              tone="soft"
+            />
           </View>
 
           <View style={styles.searchBox}>
             <Ionicons color={colors.muted} name="search-outline" size={18} />
             <TextInput
+              accessibilityLabel="Cari aset"
               autoCapitalize="none"
               autoCorrect={false}
               onChangeText={setSearch}
               placeholder="Cari kode atau nama aset"
-              placeholderTextColor={colors.muted}
+              placeholderTextColor={colors.placeholder}
               style={styles.searchInput}
               value={search}
             />
@@ -332,18 +399,22 @@ function AssetPicker({
           {error ? <Text style={styles.fieldError}>{error}</Text> : null}
 
           <FlatList
+            contentContainerStyle={styles.pickerList}
             data={items}
             ItemSeparatorComponent={() => <View style={styles.separatorLine} />}
             keyboardShouldPersistTaps="handled"
             keyExtractor={(item) => String(item.id)}
             ListEmptyComponent={
               loading ? (
-                <ActivityIndicator color={colors.accent} style={styles.loading} />
+                <View style={styles.pickerLoading}>
+                  <Skeleton height={56} radius={radius.sm} />
+                  <Skeleton height={56} radius={radius.sm} />
+                  <Skeleton height={56} radius={radius.sm} />
+                </View>
               ) : (
                 <Text style={styles.hint}>Tidak ada aset yang cocok.</Text>
               )
             }
-            style={styles.pickerList}
             renderItem={({ item }) => (
               <Pressable
                 accessibilityRole="button"
@@ -352,9 +423,14 @@ function AssetPicker({
                 }
                 style={({ pressed }) => [styles.pickerRow, pressed ? styles.pressed : null]}
               >
-                <View style={styles.pickerBody}>
-                  <Text style={styles.pickerName}>{item.assetName}</Text>
-                  <Text style={styles.pickerCode}>
+                <View style={styles.pickerRowIcon}>
+                  <Ionicons color={colors.textSecondary} name="cube-outline" size={16} />
+                </View>
+                <View style={styles.pickerText}>
+                  <Text numberOfLines={1} style={styles.pickerName}>
+                    {item.assetName}
+                  </Text>
+                  <Text numberOfLines={1} style={styles.pickerCode}>
                     {item.assetCode} · {ASSET_TYPE_LABELS[item.assetType]}
                   </Text>
                 </View>
@@ -380,125 +456,180 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    gap: spacing.md,
-    padding: spacing.lg,
-    paddingBottom: spacing.xxxl,
+    gap: spacing.lg,
+    padding: layout.screenPadding,
+    paddingBottom: spacing.huge,
+  },
+  field: {
+    gap: 4,
   },
   label: {
+    ...text.captionStrong,
     color: colors.textSecondary,
-    fontSize: typography.small,
-    fontWeight: '600',
   },
   picker: {
+    ...elevation.card,
     alignItems: 'center',
-    backgroundColor: colors.background,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    minHeight: 48,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  pickerBody: {
-    flex: 1,
-  },
-  pickerName: {
-    color: colors.text,
-    fontSize: typography.caption,
-    fontWeight: '600',
-  },
-  pickerCode: {
-    color: colors.muted,
-    fontSize: typography.small,
-    marginTop: 1,
-  },
-  pickerPlaceholder: {
-    color: colors.muted,
-    fontSize: typography.caption,
-  },
-  pressed: {
-    opacity: 0.85,
-  },
-  hint: {
-    color: colors.muted,
-    fontSize: typography.small,
-    lineHeight: 17,
-  },
-  fieldError: {
-    color: colors.danger,
-    fontSize: typography.small,
-  },
-  errorBox: {
-    backgroundColor: colors.dangerSoft,
-    borderRadius: radius.sm,
-    padding: spacing.md,
-  },
-  errorText: {
-    color: colors.danger,
-    fontSize: typography.small,
-    lineHeight: 18,
-  },
-  ruleNote: {
-    color: colors.muted,
-    fontSize: typography.small,
-    lineHeight: 17,
-  },
-  overlay: {
-    backgroundColor: 'rgba(17, 24, 39, 0.45)',
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  modalCard: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.md,
-    borderTopRightRadius: radius.md,
-    maxHeight: '80%',
-    padding: spacing.lg,
-  },
-  modalHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  modalTitle: {
-    color: colors.text,
-    fontSize: typography.heading,
-    fontWeight: '700',
-  },
-  searchBox: {
-    alignItems: 'center',
-    backgroundColor: colors.background,
     borderColor: colors.border,
     borderRadius: radius.sm,
     borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.sm,
-    height: 44,
+    justifyContent: 'space-between',
+    minHeight: 52,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  pickerError: {
+    borderColor: colors.danger,
+  },
+  pickerContent: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  pickerIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.pill,
+    height: 30,
+    justifyContent: 'center',
+    width: 30,
+  },
+  pickerText: {
+    flex: 1,
+  },
+  pickerName: {
+    ...text.bodyStrong,
+  },
+  pickerCode: {
+    ...text.small,
+    marginTop: 1,
+  },
+  pickerPlaceholder: {
+    ...text.body,
+    color: colors.placeholder,
+    flex: 1,
+  },
+  pressed: {
+    opacity: 0.85,
+  },
+  hint: {
+    ...text.small,
+  },
+  fieldError: {
+    ...text.small,
+    color: colors.dangerInk,
+  },
+  errorBox: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.dangerSoft,
+    borderRadius: radius.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  errorText: {
+    ...text.caption,
+    color: colors.dangerInk,
+    flex: 1,
+  },
+  ruleNote: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  ruleNoteText: {
+    ...text.small,
+    color: colors.primary,
+    flex: 1,
+  },
+  overlay: {
+    backgroundColor: colors.overlay,
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    maxHeight: '86%',
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+  },
+  modalHandle: {
+    alignSelf: 'center',
+    backgroundColor: colors.border,
+    borderRadius: radius.pill,
+    height: 5,
+    marginBottom: spacing.md,
+    width: 44,
+  },
+  modalHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  modalTitleBlock: {
+    flex: 1,
+    gap: 2,
+  },
+  modalTitle: {
+    ...text.heading,
+  },
+  modalSubtitle: {
+    ...text.caption,
+    color: colors.muted,
+  },
+  searchBox: {
+    alignItems: 'center',
+    backgroundColor: colors.mutedSurface,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    minHeight: 48,
     paddingHorizontal: spacing.md,
   },
   searchInput: {
+    ...text.body,
     color: colors.text,
     flex: 1,
-    fontSize: typography.caption,
-    paddingVertical: 0,
+    paddingVertical: spacing.md,
   },
   pickerList: {
-    marginTop: spacing.md,
+    paddingTop: spacing.sm,
   },
   pickerRow: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.md,
+    minHeight: 64,
     paddingVertical: spacing.md,
+  },
+  pickerRowIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.mutedSurface,
+    borderRadius: radius.sm,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
   },
   separatorLine: {
     backgroundColor: colors.border,
     height: 1,
   },
-  loading: {
-    marginVertical: spacing.xl,
+  pickerLoading: {
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
   },
 });

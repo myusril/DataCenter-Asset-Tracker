@@ -21,10 +21,13 @@ export function RiskGauge({ score, size = 268 }: RiskGaugeProps) {
   const reduced = useReducedMotion();
   const fade = useRef(new Animated.Value(reduced ? 1 : 0)).current;
   const clamped = Math.min(Math.max(score, 0), 100);
-  const height = Math.round(size * 0.62);
   const strokeWidth = 18;
   const radius = (size - strokeWidth) / 2;
   const centerY = radius + strokeWidth / 2;
+  const arcBottom = centerY + strokeWidth / 2;
+  const tickTop = arcBottom + spacing.sm;
+  /** Arc plus the 0/100 scale labels underneath. */
+  const height = Math.round(tickTop + 18);
   const path = `M ${strokeWidth / 2} ${centerY} A ${radius} ${radius} 0 0 1 ${size - strokeWidth / 2} ${centerY}`;
   const length = Math.PI * radius;
 
@@ -77,13 +80,24 @@ export function RiskGauge({ score, size = 268 }: RiskGaugeProps) {
         <Text style={styles.value}>{clamped.toFixed(2)}</Text>
         <Text style={styles.caption}>dari 100</Text>
       </View>
-      <View style={[styles.ticks, { top: centerY + 6, width: size - strokeWidth }]}>
+      <View
+        style={[
+          styles.ticks,
+          {
+            left: strokeWidth / 2 - TICK_WIDTH / 2,
+            top: tickTop,
+            width: size - strokeWidth + TICK_WIDTH,
+          },
+        ]}
+      >
         <Text style={styles.tick}>0</Text>
         <Text style={styles.tick}>100</Text>
       </View>
     </Animated.View>
   );
 }
+
+const TICK_WIDTH = 48;
 
 const styles = StyleSheet.create({
   center: {
@@ -106,11 +120,12 @@ const styles = StyleSheet.create({
   ticks: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    left: 9,
     position: 'absolute',
   },
   tick: {
     ...text.small,
     color: colors.muted,
+    textAlign: 'center',
+    width: TICK_WIDTH,
   },
 });

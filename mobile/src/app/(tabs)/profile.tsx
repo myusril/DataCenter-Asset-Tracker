@@ -1,16 +1,20 @@
 import Constants from 'expo-constants';
+import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '../../components/Button';
-import { Card } from '../../components/Card';
+import { ChartCard } from '../../components/ChartCard';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { DataList, DataRow } from '../../components/DataList';
+import { GradientHeader } from '../../components/GradientHeader';
 import { StatusPill } from '../../components/StatusPill';
 import { useAuthStore } from '../../store/auth';
 import { colors } from '../../theme/colors';
-import { radius, spacing, typography } from '../../theme/spacing';
+import { radius, spacing } from '../../theme/spacing';
 import { layout } from '../../theme/tokens';
+import { text } from '../../theme/typography';
 import { formatDateTime, initialsOf, ROLE_LABELS } from '../../utils/format';
 
 export default function ProfileScreen() {
@@ -25,34 +29,49 @@ export default function ProfileScreen() {
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
   return (
-    <SafeAreaView edges={['top']} style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Profil</Text>
-
-        <View style={styles.identity}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{initialsOf(user.fullName)}</Text>
+    <SafeAreaView edges={[]} style={styles.safe}>
+      <StatusBar style="light" />
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <GradientHeader
+          eyebrow="Akun"
+          right={
+            <View style={styles.avatar}>
+              <Text style={styles.avatarLabel}>{initialsOf(user.fullName)}</Text>
+            </View>
+          }
+          subtitle={`@${user.username}`}
+          title={user.fullName}
+        >
+          <View style={styles.roleRow}>
+            <StatusPill
+              label={ROLE_LABELS[user.role]}
+              tone={user.role === 'ADMIN' ? 'accent' : 'neutral'}
+            />
           </View>
-          <Text style={styles.name}>{user.fullName}</Text>
-          <Text style={styles.username}>@{user.username}</Text>
-          <StatusPill
-            label={ROLE_LABELS[user.role]}
-            style={styles.rolePill}
-            tone={user.role === 'ADMIN' ? 'accent' : 'neutral'}
+        </GradientHeader>
+
+        <View style={styles.body}>
+          <ChartCard title="Informasi akun">
+            <DataList>
+              <DataRow label="Email" value={user.email} />
+              <DataRow label="Login terakhir" value={formatDateTime(user.lastLogin)} />
+            </DataList>
+          </ChartCard>
+
+          <ChartCard title="Tentang aplikasi">
+            <DataList>
+              <DataRow label="Versi aplikasi" value={version} />
+              <DataRow label="Model risiko" value="Heuristik v1.0" />
+            </DataList>
+          </ChartCard>
+
+          <Button
+            icon="log-out-outline"
+            label="Keluar"
+            onPress={() => setConfirming(true)}
+            variant="danger"
           />
         </View>
-
-        <Card title="Informasi akun">
-          <Row label="Email" value={user.email} />
-          <Row label="Login terakhir" value={formatDateTime(user.lastLogin)} />
-        </Card>
-
-        <Card title="Tentang aplikasi">
-          <Row label="Versi aplikasi" value={version} />
-          <Row label="Model risiko" value="Heuristik v1.0" />
-        </Card>
-
-        <Button label="Keluar" onPress={() => setConfirming(true)} variant="danger" />
       </ScrollView>
 
       <ConfirmDialog
@@ -70,77 +89,35 @@ export default function ProfileScreen() {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   safe: {
     backgroundColor: colors.background,
     flex: 1,
   },
   content: {
-    gap: spacing.lg,
-    padding: spacing.lg,
     paddingBottom: layout.tabBarClearance,
-  },
-  title: {
-    color: colors.text,
-    fontSize: typography.title,
-    fontWeight: '700',
-    marginTop: spacing.sm,
-  },
-  identity: {
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.md,
-  },
-  rolePill: {
-    alignSelf: 'center',
   },
   avatar: {
     alignItems: 'center',
-    backgroundColor: colors.accentSoft,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.35)',
     borderRadius: radius.pill,
-    height: 72,
+    borderWidth: 1,
+    height: 52,
     justifyContent: 'center',
-    marginBottom: spacing.sm,
-    width: 72,
+    width: 52,
   },
-  avatarText: {
-    color: colors.accent,
-    fontSize: 24,
-    fontWeight: '700',
+  avatarLabel: {
+    ...text.title,
+    color: colors.onPrimary,
   },
-  name: {
-    color: colors.text,
-    fontSize: typography.heading,
-    fontWeight: '600',
-  },
-  username: {
-    color: colors.muted,
-    fontSize: typography.caption,
-    marginBottom: spacing.xs,
-  },
-  row: {
+  roleRow: {
+    alignItems: 'flex-start',
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
   },
-  rowLabel: {
-    color: colors.muted,
-    fontSize: typography.caption,
-  },
-  rowValue: {
-    color: colors.text,
-    fontSize: typography.caption,
-    fontWeight: '500',
-    maxWidth: '65%',
-    textAlign: 'right',
+  body: {
+    gap: layout.sectionGap,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.xl,
   },
 });

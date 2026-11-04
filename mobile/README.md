@@ -43,14 +43,20 @@ grafik.
   riwayat).
 - **Profil** — identitas, role, versi aplikasi, dan logout dengan konfirmasi.
 
-## Sistem desain (fase 1)
+## Sistem desain (fase 1 + 2)
 
 Fase 1 merapikan lima layar inti: login, tab shell, Dashboard, daftar aset, detail aset, dan Risiko.
-Layar Maintenance, Jaringan, Notifikasi, Profil, dan formulir memang belum dirombak (fase 2).
+Fase 2 memakai sistem yang sama untuk layar operasional: Maintenance (daftar, detail, formulir),
+Jaringan, Notifikasi, Profil, serta formulir tambah/ubah aset.
 
 - **Token** — `src/theme/colors.ts` (palet), `spacing.ts` (spacing 4–40, radius 12/16/20/28, skala
   huruf 11/12/14/16/20/28), `typography.ts` (Plus Jakarta Sans per bobot), `tokens.ts` (satu lapis
   bayangan, gradien, durasi motion, warna grafik).
+- **Header** — `GradientHeader` (hero di Dashboard/Profil/Notifikasi, `compact` di layar turunan) dengan
+  tombol kaca `IconButton`; daftar aset memakai judul besar tanpa gradien seperti fase 1.
+- **Kartu & status** — `ChartCard`, `DataList`, `StatusPill`, `Chip`, dan `SegmentedTabs`; skeleton
+  (`ListSkeleton`, `NotificationListSkeleton`, `RecordDetailSkeleton`, `FormSkeleton`), `EmptyState`
+  berilustrasi, serta `Toast` (dipakai di detail aset) untuk umpan balik singkat.
 - **Font** — Plus Jakarta Sans 400/500/600/700/800 dimuat di `src/app/_layout.tsx`; splash ditahan
   sampai font dan sesi siap sehingga layar pertama tidak berkedip.
 - **Grafik** — `DonutChart`, `BarChart`, dan `RiskGauge` memakai `react-native-svg`; semua angka berasal

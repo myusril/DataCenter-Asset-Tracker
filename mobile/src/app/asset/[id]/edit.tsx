@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -12,13 +13,15 @@ import {
 import { extractErrorMessage } from '../../../api/client';
 import { AccessDenied } from '../../../components/AccessDenied';
 import { AssetForm, assetToFormInitial } from '../../../components/AssetForm';
-import { Button } from '../../../components/Button';
-import { Card } from '../../../components/Card';
-import { Loading } from '../../../components/Loading';
-import { ScreenHeader } from '../../../components/ScreenHeader';
+import { ChartCard } from '../../../components/ChartCard';
+import { EmptyState } from '../../../components/EmptyState';
+import { GradientHeader } from '../../../components/GradientHeader';
+import { IconButton } from '../../../components/IconButton';
+import { FormSkeleton } from '../../../components/Skeleton';
 import { useIsAdmin } from '../../../hooks/useIsAdmin';
 import { colors } from '../../../theme/colors';
-import { spacing, typography } from '../../../theme/spacing';
+import { spacing } from '../../../theme/spacing';
+import { layout } from '../../../theme/tokens';
 import type { AssetDetail } from '../../../types/api';
 
 export default function EditAssetScreen() {
@@ -58,8 +61,22 @@ export default function EditAssetScreen() {
 
   if (!isAdmin) {
     return (
-      <SafeAreaView edges={['top']} style={styles.safe}>
-        <ScreenHeader onBack={() => router.back()} title="Ubah Aset" />
+      <SafeAreaView edges={[]} style={styles.safe}>
+        <StatusBar style="light" />
+        <GradientHeader
+          eyebrow="Inventaris"
+          left={
+            <IconButton
+              accessibilityLabel="Kembali"
+              icon="arrow-back"
+              onPress={() => router.back()}
+              tone="glass"
+            />
+          }
+          subtitle="Formulir ini hanya untuk administrator."
+          title="Ubah Aset"
+          variant="compact"
+        />
         <AccessDenied />
       </SafeAreaView>
     );
@@ -82,17 +99,39 @@ export default function EditAssetScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top']} style={styles.safe}>
-      <ScreenHeader onBack={() => router.back()} title="Ubah Aset" />
+    <SafeAreaView edges={[]} style={styles.safe}>
+      <StatusBar style="light" />
+      <GradientHeader
+        eyebrow="Inventaris"
+        left={
+          <IconButton
+            accessibilityLabel="Kembali"
+            icon="arrow-back"
+            onPress={() => router.back()}
+            tone="glass"
+          />
+        }
+        subtitle="Perbarui identitas, lokasi, atau data jaringan aset."
+        title="Ubah Aset"
+        variant="compact"
+      />
 
-      {loading ? <Loading message="Memuat data aset..." /> : null}
+      {loading ? (
+        <View style={styles.skeletonWrap}>
+          <FormSkeleton />
+        </View>
+      ) : null}
 
       {!loading && !asset ? (
-        <View style={styles.stateBox}>
-          <Card title="Gagal memuat aset">
-            <Text style={styles.bodyText}>{loadError ?? 'Aset tidak ditemukan.'}</Text>
-            <Button label="Coba lagi" onPress={() => void load()} style={styles.retry} />
-          </Card>
+        <View style={styles.stateWrap}>
+          <ChartCard>
+            <EmptyState
+              action={{ label: 'Coba lagi', onPress: () => void load() }}
+              illustration="error"
+              message={loadError ?? 'Aset tidak ditemukan.'}
+              title="Gagal memuat aset"
+            />
+          </ChartCard>
         </View>
       ) : null}
 
@@ -116,15 +155,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     flex: 1,
   },
-  stateBox: {
-    padding: spacing.lg,
+  skeletonWrap: {
+    paddingTop: spacing.lg,
   },
-  bodyText: {
-    color: colors.textSecondary,
-    fontSize: typography.caption,
-    lineHeight: 20,
-  },
-  retry: {
-    marginTop: spacing.lg,
+  stateWrap: {
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.lg,
   },
 });
