@@ -39,3 +39,18 @@ export const listMaintenanceQuerySchema = z.object({
 export type CreateMaintenanceInput = z.infer<typeof createMaintenanceSchema>;
 export type UpdateMaintenanceInput = z.infer<typeof updateMaintenanceSchema>;
 export type ListMaintenanceQuery = z.infer<typeof listMaintenanceQuerySchema>;
+
+/** `window` is deliberately restricted to the two sizes the UI offers. */
+export const scheduleQuerySchema = z.object({
+  window: z.coerce
+    .number()
+    .int()
+    .refine((value) => value === 7 || value === 30, 'window must be 7 or 30')
+    .default(30),
+  includeOverdue: z
+    .enum(['true', 'false'], { message: 'includeOverdue must be "true" or "false"' })
+    .default('true')
+    .transform((value) => value === 'true'),
+});
+
+export type ScheduleQuery = z.infer<typeof scheduleQuerySchema>;

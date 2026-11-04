@@ -6,6 +6,8 @@ import {
   getById,
   list,
   remove,
+  runReminders,
+  schedule,
   statistics,
   update,
 } from './maintenance.controller.js';
@@ -17,6 +19,8 @@ maintenanceRoutes.use(authenticate);
 maintenanceRoutes.get('/', list);
 // Static and nested routes must be registered before '/:id'.
 maintenanceRoutes.get('/statistics', statistics);
+maintenanceRoutes.get('/schedule', schedule);
+maintenanceRoutes.post('/reminders', requireRole('ADMIN'), runReminders);
 maintenanceRoutes.get('/asset/:assetId', byAsset);
 maintenanceRoutes.get('/:id', getById);
 maintenanceRoutes.post('/', requireRole('ADMIN'), create);

@@ -25,6 +25,8 @@ function serializeNotification(row: NotificationRow) {
     createdAt: row.createdAt,
     assetId: row.assetId,
     predictionId: row.predictionId,
+    maintenanceId: row.maintenanceId,
+    dedupeKey: row.dedupeKey,
     asset: row.asset,
   };
 }

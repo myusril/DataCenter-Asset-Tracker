@@ -20,6 +20,12 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().optional(),
   SEED_ADMIN_PASSWORD: z.string().min(8).optional(),
   SEED_TECH_PASSWORD: z.string().min(8).optional(),
+  // Daily in-process reminder scan. Off by default so tests and one-off
+  // processes never start a timer; deployments opt in explicitly.
+  REMINDER_JOB_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
 });
 
 const parsed = envSchema.safeParse(process.env);

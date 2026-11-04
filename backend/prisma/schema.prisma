@@ -60,16 +60,16 @@ enum NotificationType {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  username     String   @unique
-  email        String   @unique
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  email        String    @unique
   passwordHash String
   fullName     String
-  role         Role     @default(TECHNICIAN)
-  isActive     Boolean  @default(true)
+  role         Role      @default(TECHNICIAN)
+  isActive     Boolean   @default(true)
   lastLogin    DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   createdAssets Asset[]              @relation("AssetCreatedBy")
   maintenances  MaintenanceHistory[] @relation("MaintenanceTechnician")
@@ -155,8 +155,9 @@ model MaintenanceHistory {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  asset      Asset @relation(fields: [assetId], references: [id], onDelete: Restrict)
-  technician User? @relation("MaintenanceTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+  asset         Asset          @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  technician    User?          @relation("MaintenanceTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+  notifications Notification[]
 
   @@index([assetId])
   @@index([technicianId])
@@ -188,24 +189,31 @@ model AiPrediction {
 }
 
 model Notification {
-  id           Int              @id @default(autoincrement())
-  userId       Int
-  assetId      Int?
-  predictionId Int?
-  type         NotificationType
-  title        String
-  message      String
-  isRead       Boolean          @default(false)
-  readAt       DateTime?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  id            Int              @id @default(autoincrement())
+  userId        Int
+  assetId       Int?
+  predictionId  Int?
+  maintenanceId Int?
+  type          NotificationType
+  title         String
+  message       String
+  isRead        Boolean          @default(false)
+  readAt        DateTime?
+  // Idempotency key for generated reminders, e.g. "12:2026-12-01". Null for
+  // manually created rows; PostgreSQL treats every NULL as distinct.
+  dedupeKey     String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
-  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  asset      Asset?        @relation(fields: [assetId], references: [id], onDelete: SetNull)
-  prediction AiPrediction? @relation(fields: [predictionId], references: [id], onDelete: SetNull)
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset       Asset?              @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  prediction  AiPrediction?       @relation(fields: [predictionId], references: [id], onDelete: SetNull)
+  maintenance MaintenanceHistory? @relation(fields: [maintenanceId], references: [id], onDelete: SetNull)
 
+  @@unique([userId, dedupeKey])
   @@index([userId])
   @@index([assetId])
   @@index([predictionId])
+  @@index([maintenanceId])
   @@map("notifications")
 }
