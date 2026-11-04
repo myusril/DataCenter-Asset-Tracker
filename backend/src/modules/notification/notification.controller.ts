@@ -1,8 +1,13 @@
 import type { RequestHandler } from 'express';
 import { AppError, sendSuccess } from '../../utils/response.js';
 import { idParamSchema } from '../../utils/validation.js';
-import { listNotificationQuerySchema } from './notification.schema.js';
 import {
+  deleteDeviceTokenSchema,
+  deviceTokenSchema,
+  listNotificationQuerySchema,
+} from './notification.schema.js';
+import {
+  deleteDeviceTokens,
   deleteNotification,
   deleteReadNotifications,
   getNotification,
@@ -10,6 +15,7 @@ import {
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  registerDeviceToken,
 } from './notification.service.js';
 
 function requireUser(req: { user?: { id: number } }): number {
@@ -56,4 +62,16 @@ export const remove: RequestHandler = async (req, res) => {
 export const removeRead: RequestHandler = async (req, res) => {
   const result = await deleteReadNotifications(requireUser(req));
   sendSuccess(res, result, 'Read notifications deleted successfully');
+};
+
+export const registerDevice: RequestHandler = async (req, res) => {
+  const input = deviceTokenSchema.parse(req.body ?? {});
+  const row = await registerDeviceToken(requireUser(req), input);
+  sendSuccess(res, row, 'Device token registered successfully');
+};
+
+export const removeDevice: RequestHandler = async (req, res) => {
+  const input = deleteDeviceTokenSchema.parse(req.body ?? {});
+  const result = await deleteDeviceTokens(requireUser(req), input.token);
+  sendSuccess(res, result, 'Device token removed successfully');
 };

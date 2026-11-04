@@ -17,4 +17,23 @@ export const listNotificationQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(10),
 });
 
+export const deviceTokenSchema = z.object({
+  token: z
+    .string({ message: 'Token is required' })
+    .min(20, 'Token must be at least 20 characters')
+    .max(4096, 'Token must be at most 4096 characters'),
+  platform: z.enum(['ANDROID', 'IOS'], {
+    message: 'Platform must be "ANDROID" or "IOS"',
+  }),
+});
+
+export const deleteDeviceTokenSchema = z.object({
+  token: z
+    .string()
+    .min(20, 'Token must be at least 20 characters')
+    .max(4096, 'Token must be at most 4096 characters')
+    .optional(),
+});
+
 export type ListNotificationQuery = z.infer<typeof listNotificationQuerySchema>;
+export type DeviceTokenInput = z.infer<typeof deviceTokenSchema>;

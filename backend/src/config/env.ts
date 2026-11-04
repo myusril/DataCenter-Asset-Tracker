@@ -26,6 +26,18 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((value) => value === 'true'),
+  // FCM push delivery. Off by default: without a Firebase service account the
+  // provider is a no-op, and the in-app notification rows remain the source of
+  // truth. FIREBASE_SERVICE_ACCOUNT points at the service-account JSON on the
+  // server; it is never committed.
+  PUSH_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+  FIREBASE_SERVICE_ACCOUNT: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().min(1).optional(),
+  ),
 });
 
 const parsed = envSchema.safeParse(process.env);

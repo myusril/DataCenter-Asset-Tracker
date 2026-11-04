@@ -5,7 +5,9 @@ import {
   list,
   markAllRead,
   markRead,
+  registerDevice,
   remove,
+  removeDevice,
   removeRead,
   unreadCount,
 } from './notification.controller.js';
@@ -19,6 +21,8 @@ notificationRoutes.get('/', list);
 notificationRoutes.get('/unread-count', unreadCount);
 notificationRoutes.put('/read-all', markAllRead);
 notificationRoutes.delete('/read', removeRead);
+notificationRoutes.post('/device', registerDevice);
+notificationRoutes.delete('/device', removeDevice);
 notificationRoutes.get('/:id', getById);
 notificationRoutes.put('/:id/read', markRead);
 notificationRoutes.delete('/:id', remove);
