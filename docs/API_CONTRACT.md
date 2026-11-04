@@ -8,9 +8,10 @@ dulu, bukan dilakukan diam-diam saat mengerjakan mobile.
 - Content type: `application/json`
 - Semua endpoint selain `GET /health`, `POST /api/auth/register`, dan `POST /api/auth/login`
   membutuhkan header `Authorization: Bearer <token>`.
-- Total endpoint: **40** = 37 dari dokumen (Auth 3, Asset 6, Maintenance 7, Network 8, AI 6,
-  Notification 7) + **3 ekstensi**: 2 jadwal/pengingat maintenance dan 1 profil sendiri
-  (`PATCH /api/users/me`).
+- Total endpoint: **42** = 37 dari dokumen (Auth 3, Asset 6, Maintenance 7, Network 8, AI 6,
+  Notification 7) + **5 ekstensi**: 2 jadwal/pengingat maintenance, 1 profil sendiri
+  (`PATCH /api/users/me`), dan 2 pendaftaran perangkat push
+  (`POST`/`DELETE /api/notifications/device`).
 
 ## 1. Response envelope
 
@@ -782,9 +783,9 @@ Kegagalan satu aset dicatat di `failed` dan tidak menggagalkan seluruh batch (HT
 
 ## 7. Notification
 
-Modul `src/modules/notification/` berisi 4 file. Semua endpoint membutuhkan token dan hanya
-menyentuh baris milik user yang login. Notifikasi milik user lain dijawab **404** (bukan 403) agar
-keberadaannya tidak bocor.
+Modul `src/modules/notification/` berisi 5 file (`push.provider.ts` menangani FCM). Semua endpoint
+membutuhkan token dan hanya menyentuh baris milik user yang login. Notifikasi milik user lain dijawab
+**404** (bukan 403) agar keberadaannya tidak bocor.
 
 ### Bentuk notifikasi
 
@@ -820,9 +821,52 @@ memiliki `maintenanceId = null` dan `dedupeKey = null`.
 | PUT | `/api/notifications/read-all` | `{ "updated": 3 }` |
 | DELETE | `/api/notifications/:id` | Hapus satu milik user |
 | DELETE | `/api/notifications/read` | `{ "deleted": 2 }` — hapus semua yang sudah dibaca |
+| POST | `/api/notifications/device` | Daftarkan/perbarui token FCM perangkat milik user |
+| DELETE | `/api/notifications/device` | Hapus satu token (body `{ token }`) atau semua token user |
 
-Urutan route: `/unread-count`, `/read-all`, dan `/read` didaftarkan sebelum `/:id` agar tidak
-dianggap sebagai id.
+Urutan route: `/unread-count`, `/read-all`, `/read`, dan `/device` didaftarkan sebelum `/:id` agar
+tidak dianggap sebagai id.
+
+### Pendaftaran perangkat (FCM)
+
+`POST /api/notifications/device` menerima `{ "token": "…", "platform": "ANDROID" | "IOS" }`.
+Token wajib 20–4096 karakter. Token unik secara global: mendaftarkan ulang token yang sama
+memperbarui `platform` dan `lastSeenAt` tanpa membuat baris baru, dan bila token itu sebelumnya milik
+user lain, baris tersebut **dipindahkan** ke user yang sedang login (satu perangkat, satu pemilik).
+
+```json
+{ "success": true, "message": "Device token registered successfully",
+  "data": { "id": 4, "platform": "ANDROID", "lastSeenAt": "2026-11-04T12:00:00.000Z" } }
+```
+
+`DELETE /api/notifications/device` dengan body `{ "token": "…" }` menghapus token itu hanya bila
+milik pemanggil; tanpa body, seluruh token pemanggil dihapus. Token milik user lain tidak pernah
+dihapus dan dilaporkan sebagai `{ "deleted": 0 }`. Respons: `{ "deleted": 1 }`.
+
+### Push (FCM)
+
+Push hanya cermin dari baris notifikasi in-app; baris tetap sumber kebenaran. Setelah baris
+`AI_ALERT` atau `MAINTENANCE_REMINDER` tersimpan (dan transaksi prediksi sudah commit), server
+mengirim FCM ke semua token penerima tanpa menunggu hasilnya:
+
+```json
+{
+  "notification": { "title": "…", "body": "…" },
+  "data": {
+    "type": "AI_ALERT",
+    "assetId": "10",
+    "predictionId": "16",
+    "deepLink": "/asset/10"
+  }
+}
+```
+
+`MAINTENANCE_REMINDER` mengisi `maintenanceId` dan `deepLink = "/maintenance/<id>"`. Semua nilai
+`data` berupa string (batasan FCM). Token yang dilaporkan FCM sebagai
+`registration-token-not-registered` atau `invalid-argument` dihapus dari `device_tokens`; kegagalan
+sementara tidak menghapus token. Bila `PUSH_ENABLED=false` atau service account tidak ada, provider
+menjadi no-op dan hanya menulis satu peringatan saat boot; endpoint dan notifikasi in-app tetap
+berjalan normal. Kredensial hanya ada di server (`FIREBASE_SERVICE_ACCOUNT`), tidak pernah di repo.
 
 Urutan list: `createdAt` menurun, lalu `id` menurun.
 
@@ -861,6 +905,7 @@ dan LOW tidak membuat alert.
 | 12 | Clamp akhir 100 | Skor maksimum yang dapat dicapai adalah 99; clamp 100 adalah pengaman |
 | 13 | Dokumen tidak menyediakan endpoint jadwal/pengingat maintenance | Ditambahkan 2 endpoint ekstensi (`GET /api/maintenance/schedule`, `POST /api/maintenance/reminders`) tanpa mengubah bentuk endpoint lama; total menjadi 39 |
 | 14 | Dokumen tidak menyediakan endpoint ubah profil; layar profil semula hanya baca | Ditambahkan 1 endpoint ekstensi `PATCH /api/users/me` (self only, field `username`/`role`/`isActive` ditolak 400); total menjadi 40 |
+| 15 | Dokumen tidak menyediakan kanal push | Ditambahkan 2 endpoint perangkat dan pengiriman FCM langsung (bukan Expo Push Service); push tidak mengubah bentuk respons notifikasi lama; total menjadi 42 |
 
 Kontrak AI dan notification di atas dipakai oleh tahap mobile. Mesin AI tetap deterministik:
 jangan menambahkan klaim akurasi atau menyebutnya sebagai model yang dilatih.

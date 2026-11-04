@@ -41,6 +41,12 @@ grafik.
 - **Form admin aset** — bagian Umum, Lokasi, dan Jaringan; validasi inline tanpa library schema;
   prefill saat mengedit; pesan konflik 409 yang terbaca (kode/serial duplikat, aset masih punya
   riwayat).
+- **Push notification (Android, FCM)** — setelah login aplikasi meminta izin notifikasi (sekali),
+  mendaftarkan token FCM ke `POST /api/notifications/device`, memperbaruinya saat FCM memutar token,
+  dan menghapusnya saat logout. Ketuk notifikasi `AI_ALERT` → detail aset, `MAINTENANCE_REMINDER` →
+  detail maintenance (fallback ke tab Maintenance aset). Notifikasi tetap masuk ke pusat notifikasi
+  in-app; push hanya cerminnya. Tanpa `google-services.json`, build tetap berjalan dan fitur push
+  tidak aktif.
 - **Profil** — identitas, role, versi aplikasi, dan logout dengan konfirmasi. Semua role mendapat
   panel **Edit profil** (`PATCH /api/users/me`): nama lengkap dan email diperbarui inline, password
   opsional beserta konfirmasi dan password saat ini, validasi di layar sebelum dikirim, toast sukses,
@@ -133,7 +139,10 @@ APK dibangun langsung dengan Gradle di mesin pengembang; tidak memakai EAS, akun
 unggahan ke toko aplikasi.
 
 Prasyarat: JDK 17 dan Android SDK dengan build-tools 36.1.0. Isi `JAVA_HOME` dan `ANDROID_HOME` sesuai
-lokasi instalasi di mesin Anda. Alamat API diberikan saat build lewat `EXPO_PUBLIC_API_URL` (lihat
+lokasi instalasi di mesin Anda. Untuk push, letakkan `mobile/google-services.json` (milik proyek
+Firebase Anda, **tidak di-commit**) sebelum `expo prebuild`; `app.config.js` hanya menambahkan
+`android.googleServicesFile` bila file itu ada, dan plugin `expo-notifications` memakai channel
+Android `default` (importance HIGH). Alamat API diberikan saat build lewat `EXPO_PUBLIC_API_URL` (lihat
 bagian "Konfigurasi alamat API"); nilainya ditanam ke dalam bundel, jadi mengganti alamat berarti
 build ulang dan alamat sungguhan tidak boleh ditulis ke file yang di-commit.
 
@@ -186,7 +195,12 @@ cd mobile/android
 Catatan:
 
 - `android/` adalah hasil generate `expo prebuild` dan tidak di-commit (lihat `.gitignore`). Jalankan
-  ulang `expo prebuild` setelah mengubah konfigurasi di `app.json`.
+  ulang `expo prebuild` setelah mengubah konfigurasi di `app.json`/`app.config.js`.
+- `google-services.json` adalah kredensial build-time milik mahasiswa dan di-ignore git. Jangan pernah
+  menyalin isinya ke kode, dokumentasi, atau commit. Service account FCM hanya diletakkan di server
+  (`FIREBASE_SERVICE_ACCOUNT`), bukan di aplikasi.
+- Push hanya berjalan pada build yang memuat `google-services.json`; Expo Go tidak memakai file itu,
+  jadi uji push memerlukan APK release/debug hasil Gradle.
 - ID aplikasi Android ada di `expo.android.package` (`com.datacentertracker.app`); ganti sebelum
   publikasi ke toko aplikasi.
 - Kedua jenis APK ditandatangani dengan debug keystore; jangan dipakai untuk distribusi publik.
@@ -195,7 +209,8 @@ Catatan:
 
 ```
 mobile/
-├── app.json                 # nama, scheme, plugin expo-router
+├── app.json                 # nama, scheme, plugin expo-router + expo-notifications
+├── app.config.js            # menambahkan googleServicesFile hanya bila file ada
 ├── .env.example             # EXPO_PUBLIC_API_URL
 └── src/
     ├── api/                 # client axios, session bridge, auth, users, assets, maintenance, network, ai, notifications
@@ -211,6 +226,7 @@ mobile/
     │   └── network.tsx      # daftar jaringan
     ├── components/          # primitif desain: GradientHeader, ChartCard, DonutChart, BarChart, RiskGauge, SegmentedTabs, Skeleton, Sheet, Toast + komponen lama
     ├── hooks/               # useIsAdmin, useReducedMotion, useCountUp
+    ├── notifications/       # push.ts: izin, channel Android, token FCM, tap routing
     ├── store/               # auth (persist AsyncStorage), notifications (badge)
     ├── theme/               # colors, spacing, typography (Plus Jakarta Sans), tokens (elevation, gradien, motion)
     ├── types/api.ts         # tipe respons kontrak API
@@ -285,6 +301,22 @@ seed, dengan `adb reverse` untuk port 3000 dan 8081.
 | Catatan dihapus | Setelah baris maintenance dihapus, ketuk pengingat STG-001 membuka `/asset/5?tab=maintenance` dan tab **Maintenance** langsung aktif |
 | Teknisi | Layar jadwal tanpa kartu/aksi pengingat; tab dan empty state tetap berfungsi |
 
+### Brief 11 — push token di HP fisik (4 November 2026)
+
+APK release dibangun lokal dengan `google-services.json` dan `EXPO_PUBLIC_API_URL=http://localhost:3000`,
+lalu dipasang pada **Infinix X6882** (Android 14) dengan `adb reverse tcp:3000 tcp:3000`.
+
+| Alur | Hasil yang diamati |
+|---|---|
+| Login | Setelah kredensial benar, dialog izin notifikasi Android muncul satu kali |
+| Izinkan | `device_tokens` berisi 1 baris, panjang token 142, platform `ANDROID` (token tidak dicetak) |
+| Buka ulang aplikasi | Jumlah baris tetap 1 (upsert idempoten), tanpa prompt izin kedua |
+| Logout | Baris token dihapus (jumlah 0) dan aplikasi kembali ke layar login |
+
+Catatan: APK uji lokal memakai manifest generate yang ditambahi `usesCleartextTraffic="true"` agar
+bisa mencapai backend HTTP `localhost`; `android/` di-ignore dan perubahan itu tidak di-commit.
+Pengiriman FCM end-to-end belum diuji karena belum ada service account Firebase.
+
 ### Batasan
 
 - Tombol back perangkat pada emulator Expo Go tidak memicu navigasi; tombol back di header berfungsi.
@@ -297,4 +329,6 @@ seed, dengan `adb reverse` untuk port 3000 dan 8081.
 - Backend lokal memakai HTTP tanpa TLS.
 - Prediksi AI adalah heuristik deterministik (aturan + statistik + pola), bukan model machine learning
   yang dilatih; tidak ada klaim akurasi.
-- Pengingat maintenance hanya in-app; tidak ada push notification, email, atau WhatsApp.
+- Push notification hanya untuk Android (FCM); iOS/APNs, email, dan WhatsApp belum disiapkan.
+- Push memerlukan `google-services.json` saat build dan service account di server; tanpa keduanya
+  aplikasi tetap berjalan dengan notifikasi in-app.

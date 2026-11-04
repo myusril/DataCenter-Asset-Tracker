@@ -42,3 +42,6 @@ yarn-error.*
 
 # local env
 .env
+
+# Firebase build-time credential (student-owned, never committed)
+google-services.json

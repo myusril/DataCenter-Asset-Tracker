@@ -59,6 +59,11 @@ enum NotificationType {
   INFO
 }
 
+enum DevicePlatform {
+  ANDROID
+  IOS
+}
+
 model User {
   id           Int       @id @default(autoincrement())
   username     String    @unique
@@ -74,6 +79,7 @@ model User {
   createdAssets Asset[]              @relation("AssetCreatedBy")
   maintenances  MaintenanceHistory[] @relation("MaintenanceTechnician")
   notifications Notification[]
+  deviceTokens  DeviceToken[]
 
   @@map("users")
 }
@@ -216,4 +222,18 @@ model Notification {
   @@index([predictionId])
   @@index([maintenanceId])
   @@map("notifications")
+}
+
+model DeviceToken {
+  id         Int            @id @default(autoincrement())
+  userId     Int
+  token      String         @unique
+  platform   DevicePlatform
+  createdAt  DateTime       @default(now())
+  lastSeenAt DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("device_tokens")
 }

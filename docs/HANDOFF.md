@@ -4,28 +4,37 @@ Dokumen ini mencatat status pekerjaan terakhir agar sesi berikutnya bisa melanju
 
 ## Status
 
-Brief 10 (ubah profil sendiri) selesai pada branch `feat/profile-edit` (3 commit). Backend mendapat
-`PATCH /api/users/me` (nama, email, password; self only) dan mobile mendapat panel **Edit profil** di
-layar Profil untuk admin maupun teknisi. Total endpoint kini **40** = 37 dari dokumen + 3 ekstensi
-(jadwal/pengingat maintenance dan profil sendiri). Tidak ada perubahan skema/migrasi. Branch belum
-di-merge ke `main`; mahasiswa yang melakukan merge dan men-deploy backend.
+Brief 11 (push notification lewat FCM langsung) selesai pada branch `feat/push-notifications`
+(4 commit). Backend mendapat tabel `device_tokens` (migrasi `20261104120000_add_device_tokens`),
+2 endpoint pendaftaran perangkat, dan provider `push.provider.ts` berbasis `firebase-admin`; mobile
+mendaftarkan token FCM setelah login, memperbaruinya saat token berputar, menghapusnya saat logout,
+dan membuka layar tujuan saat notifikasi diketuk. Total endpoint kini **42** = 37 dari dokumen +
+5 ekstensi (2 jadwal/pengingat maintenance, profil sendiri, 2 perangkat push). Push nonaktif secara
+default (`PUSH_ENABLED=false`) dan menjadi no-op bila service account belum ada; baris notifikasi
+in-app tetap sumber kebenaran. Branch belum di-merge ke `main`; mahasiswa yang melakukan merge dan
+men-deploy backend.
 
 Brief 9 (jadwal maintenance + pengingat otomatis) sudah di `main`: 2 endpoint ekstensi dan job harian,
 layar `/schedule`, kartu dashboard, dan pemetaan notifikasi `MAINTENANCE_REMINDER`.
 
 Sudah tersedia:
 
-- Skema Prisma 7 tabel + seed demo (2 user, 9 aset, 8 maintenance, 8 baris network). Tabel
+- Skema Prisma 8 tabel + seed demo (2 user, 9 aset, 8 maintenance, 8 baris network). Tabel
   `notifications` memiliki `maintenanceId` (FK `SetNull`) dan `dedupeKey` dengan indeks unik
-  `(userId, dedupeKey)`.
+  `(userId, dedupeKey)`. Tabel `device_tokens` menyimpan token FCM unik per perangkat dengan
+  `platform` (ANDROID/IOS), `createdAt`, `lastSeenAt`, FK `userId` cascade, dan indeks `userId`.
 - Auth JWT + bcrypt, role guard, aturan registrasi admin bootstrap.
 - Modul asset, maintenance (sinkronisasi status), network (termasuk simulasi cek koneksi).
 - Mesin risiko hibrida deterministik (`src/modules/ai-prediction/`, 7 file): Layer 1 aturan berbobot,
   Layer 2 statistik, Layer 3 pola, narasi Indonesia. Bukan model ML yang dilatih dan tidak memanggil
   layanan eksternal.
 - Penyimpanan prediksi berversi (`isActive`), `explain` yang tidak menulis baris, dan 6 endpoint AI.
-- Modul notification (4 file, 7 endpoint) dengan scoping per user; prediksi HIGH membuat satu
-  `AI_ALERT` untuk setiap user aktif dalam transaksi yang sama.
+- Modul notification (5 file, 9 endpoint) dengan scoping per user; prediksi HIGH membuat satu
+  `AI_ALERT` untuk setiap user aktif dalam transaksi yang sama, lalu push FCM dikirim setelah commit
+  ke seluruh penerima. Pengingat maintenance juga memicu push hanya untuk baris yang baru dibuat.
+- Push FCM: `POST`/`DELETE /api/notifications/device` (upsert per token, hapus token milik sendiri),
+  provider no-op saat `PUSH_ENABLED=false` atau `FIREBASE_SERVICE_ACCOUNT` tidak ada, dan pemangkasan
+  token yang dilaporkan FCM sebagai tidak terdaftar/tidak valid.
 - Jadwal maintenance: `GET /api/maintenance/schedule` (terlewat lebih dulu, `daysUntil`, `state`,
   ringkasan aset, hasil terakhir) dan `POST /api/maintenance/reminders` (ADMIN, idempoten, satu
   `MAINTENANCE_REMINDER` per user aktif per jadwal). Job `node-cron` 07.00 aktif hanya bila
@@ -34,9 +43,9 @@ Sudah tersedia:
   (dengan `currentPassword`) milik user yang login. `username`, `role`, dan `isActive` ditolak 400;
   email unik mengecualikan baris pemanggil (409); password di-hash ulang bcrypt cost 10; JWT yang
   sedang dipakai tetap sah setelah password berubah (mobile memilih logout).
-- Pengujian backend: **13 suite / 133 test** (`npm run test:coverage`) — unit test mesin AI +
-  verifikasi token, dan integration test HTTP untuk 40 endpoint dengan database
-  `datacenter_tracker_test`. Statements 89.81%, lines 89.78%, functions 93.59%, branches 74.18%;
+- Pengujian backend: **14 suite / 143 test** (`npm run test:coverage`) — unit test mesin AI +
+  verifikasi token, dan integration test HTTP untuk 42 endpoint dengan database
+  `datacenter_tracker_test`. Statements 89.75%, lines 89.72%, functions 94.19%, branches 73.56%;
   threshold di `jest.config.mjs`. Smoke flow API tetap ada di `docs/scripts/smoke.sh`.
 - Aplikasi mobile lengkap: login/auto-login, dashboard, daftar aset, detail aset 4 tab, maintenance
   (daftar/detail/form), jaringan (daftar + cek), tab AI (ringkasan, top 5, dialog explain, prediksi
@@ -65,7 +74,7 @@ Sudah tersedia:
 Teknisi tidak melihat kontrol tulis di layar mana pun; membuka rute admin langsung menampilkan
 "Akses ditolak".
 
-## Endpoint modul (40) + health (1)
+## Endpoint modul (42) + health (1)
 
 | Modul | Jumlah | Path |
 |---|---|---|
@@ -74,7 +83,7 @@ Teknisi tidak melihat kontrol tulis di layar mana pun; membuka rute admin langsu
 | Maintenance | 9 | 7 dari dokumen: `GET /api/maintenance`, `GET /api/maintenance/statistics`, `GET /api/maintenance/asset/:assetId`, `GET /api/maintenance/:id`, `POST`, `PUT /:id`, `DELETE /:id`; 2 ekstensi: `GET /api/maintenance/schedule`, `POST /api/maintenance/reminders` |
 | Network | 8 | `GET /api/network`, `GET /api/network/statistics`, `GET /api/network/asset/:assetId`, `GET /api/network/:id`, `POST /api/network`, `PUT /:id`, `DELETE /:id`, `POST /api/network/:id/check` |
 | AI | 6 | `GET /api/ai/predictions`, `GET /api/ai/predictions/asset/:assetId`, `GET /api/ai/risk-summary`, `GET /api/ai/explain/:assetId`, `POST /api/ai/predict/:assetId`, `POST /api/ai/predict-batch` |
-| Notification | 7 | `GET /api/notifications`, `GET /api/notifications/unread-count`, `GET /api/notifications/:id`, `PUT /api/notifications/:id/read`, `PUT /api/notifications/read-all`, `DELETE /api/notifications/:id`, `DELETE /api/notifications/read` |
+| Notification | 9 | 7 endpoint notifikasi: `GET /api/notifications`, `GET /api/notifications/unread-count`, `GET /api/notifications/:id`, `PUT /api/notifications/:id/read`, `PUT /api/notifications/read-all`, `DELETE /api/notifications/:id`, `DELETE /api/notifications/read`; 2 ekstensi perangkat: `POST /api/notifications/device`, `DELETE /api/notifications/device` |
 | User | 1 | `PATCH /api/users/me` (ekstensi, self only) |
 | Health (di luar 40) | 1 | `GET /health` |
 
@@ -101,7 +110,7 @@ Bentuk respons, status code, dan aturan tiap modul ada di `docs/API_CONTRACT.md`
 cd backend
 npx tsc --noEmit
 npm run test:db:prepare     # buat + migrasi + kosongkan datacenter_tracker_test
-npm run test:coverage       # 13 suite / 133 test + threshold
+npm run test:coverage       # 14 suite / 143 test + threshold
 npm run test:db:drop        # hapus database test
 npm run dev
 
@@ -113,6 +122,9 @@ cd mobile
 npx tsc --noEmit
 EXPO_PUBLIC_API_URL=http://<IP-LAN-komputer>:3000 npx expo start --android   # HP fisik
 EXPO_PUBLIC_API_URL=http://localhost:3000 npx expo start --web               # web
+
+# Push (opsional): letakkan google-services.json di mobile/ lalu build ulang.
+# Di server, set PUSH_ENABLED=true dan FIREBASE_SERVICE_ACCOUNT=/path/service-account.json.
 ```
 
 Database test diturunkan dari `DATABASE_URL` di `backend/.env` dengan nama database diganti menjadi
@@ -121,8 +133,10 @@ diubah oleh gate (`users` 2, `assets` 9, `maintenance_history` 14, `ai_predictio
 sesudah). `prisma migrate deploy` dipakai untuk database test, bukan `migrate reset`.
 
 Environment variable (nama saja): `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`,
-`NODE_ENV`, `SEED_ADMIN_PASSWORD`, `SEED_TECH_PASSWORD`, `REMINDER_JOB_ENABLED` (default `false`),
-dan `EXPO_PUBLIC_API_URL` untuk mobile. Nilai asli hanya ada di `backend/.env` (tidak di-commit).
+`NODE_ENV`, `CORS_ORIGIN`, `SEED_ADMIN_PASSWORD`, `SEED_TECH_PASSWORD`, `REMINDER_JOB_ENABLED`
+(default `false`), `PUSH_ENABLED` (default `false`), `FIREBASE_SERVICE_ACCOUNT` (path JSON service
+account di server, mode `600`), dan `EXPO_PUBLIC_API_URL` untuk mobile. Nilai asli hanya ada di `backend/.env`
+(tidak di-commit).
 
 ## Kondisi data demo saat handoff
 
@@ -150,6 +164,14 @@ Selama pengujian manual brief 4, data demo ikut berubah (ini normal, bukan bug):
   ke "Budi Teknisi" dikembalikan ke "Budi Santoso". Brief ini tidak menambah/menghapus baris demo:
   2 user, 9 aset, 14 maintenance, dan 79 prediksi (angka prediksi sudah 79 sebelum brief berjalan,
   hasil sesi sebelumnya; catatan "70" pada handoff brief 9 sudah usang).
+- Brief 11 menambah migrasi `20261104120000_add_device_tokens` (tabel baru; baris lama tidak
+  berubah) dan hanya menguji di database test serta backend lokal. Push end-to-end **belum** dapat
+  diverifikasi karena tidak ada service account Firebase di mesin ini: `PUSH_ENABLED=false` dan
+  provider no-op. Pada Infinix X6882 (Android 14), login menampilkan prompt izin satu kali; setelah
+  diizinkan, `device_tokens` berisi 1 baris (token tidak pernah dicetak), membuka ulang aplikasi
+  tidak menambah baris, dan logout menghapusnya kembali menjadi 0. Login tersebut memperbarui
+  `lastLogin` akun `admin`; tidak ada baris notifikasi yang diubah. Pengiriman FCM dari Firebase
+  Console menunggu service account di server dan APK yang dibangun dengan `google-services.json`.
 
 Untuk mengembalikan data demo ke kondisi seed (lokal, destruktif):
 
@@ -163,9 +185,9 @@ Setelah reset, jalankan prediksi batch sekali agar dashboard dan tab AI kembali 
 ## Tidak diimplementasikan
 
 - **Fase 6**: EAS build, APK/IPA, distribusi, dan UAT di perangkat pengguna.
-- Push notification (alert dan pengingat hanya in-app), mode offline SQLite, unggah gambar aset,
-  export PDF/Excel, dark mode, QR scanner, adaptive weight, HTTPS, rate limiting, Sentry, Docker,
-  CI/CD, direktori `ai-service/`.
+- iOS APNs (baru Android yang disiapkan), topik/segmen push, rich media, push terjadwal, analitik
+  push, mode offline SQLite, unggah gambar aset, export PDF/Excel, dark mode, QR scanner, adaptive
+  weight, HTTPS, rate limiting, Sentry, Docker, CI/CD, direktori `ai-service/`.
 - Endpoint daftar user sehingga teknisi pada form maintenance belum dapat dipilih.
 - Layar registrasi di mobile (registrasi hanya lewat API).
 

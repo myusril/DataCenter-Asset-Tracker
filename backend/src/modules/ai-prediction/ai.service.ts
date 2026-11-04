@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../config/database.js';
 import { createHighRiskAlerts } from '../notification/notification.service.js';
+import { dispatchPush } from '../notification/push.provider.js';
 import { AppError, buildPagination } from '../../utils/response.js';
 import { decimalToNumber } from '../../utils/serialize.js';
 import { buildNarrative, buildTopFactors, riskLevelForScore } from './ai.explanation.js';
@@ -266,9 +267,9 @@ export async function predictAsset(assetId: number): Promise<PredictResult> {
       select: { id: true, predictedAt: true },
     });
 
-    let alertsCreated = 0;
+    let alert: Awaited<ReturnType<typeof createHighRiskAlerts>> | null = null;
     if (assessment.riskLevel === 'HIGH') {
-      alertsCreated = await createHighRiskAlerts(tx, {
+      alert = await createHighRiskAlerts(tx, {
         predictionId: created.id,
         assetId,
         assetCode: assessment.assetCode,
@@ -278,15 +279,30 @@ export async function predictAsset(assetId: number): Promise<PredictResult> {
       });
     }
 
-    return { created, alertsCreated };
+    return { created, alert };
   });
+
+  // Push only after the transaction commits: a delivery failure must never
+  // roll back the prediction or its in-app notification rows.
+  if (stored.alert && stored.alert.recipients.length > 0) {
+    dispatchPush(stored.alert.recipients, {
+      title: stored.alert.title,
+      body: stored.alert.message,
+      data: {
+        type: 'AI_ALERT',
+        assetId: String(assetId),
+        predictionId: String(stored.created.id),
+        deepLink: `/asset/${assetId}`,
+      },
+    });
+  }
 
   return {
     ...assessment,
     id: stored.created.id,
     predictedAt: stored.created.predictedAt,
     isActive: true,
-    alertsCreated: stored.alertsCreated,
+    alertsCreated: stored.alert?.created ?? 0,
   };
 }
 

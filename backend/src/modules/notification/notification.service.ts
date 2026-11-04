@@ -1,7 +1,8 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../config/database.js';
 import { AppError, buildPagination } from '../../utils/response.js';
-import type { ListNotificationQuery } from './notification.schema.js';
+import type { DeviceTokenInput, ListNotificationQuery } from './notification.schema.js';
+import { dispatchPush } from './push.provider.js';
 
 // Every read and write is scoped to the authenticated user. A row belonging
 // to another user is reported as 404 so its existence is not leaked.
@@ -121,6 +122,43 @@ export async function deleteReadNotifications(userId: number) {
   return { deleted: result.count };
 }
 
+/**
+ * Registers an FCM token for the caller. The token is unique across users, so
+ * the same physical device signing in as another account moves the row to that
+ * account instead of creating a duplicate.
+ */
+export async function registerDeviceToken(userId: number, input: DeviceTokenInput) {
+  const now = new Date();
+  const row = await prisma.deviceToken.upsert({
+    where: { token: input.token },
+    create: {
+      userId,
+      token: input.token,
+      platform: input.platform,
+      lastSeenAt: now,
+    },
+    update: {
+      userId,
+      platform: input.platform,
+      lastSeenAt: now,
+    },
+    select: { id: true, platform: true, lastSeenAt: true },
+  });
+  return row;
+}
+
+/**
+ * Removes one token when supplied, otherwise every token of the caller. The
+ * `userId` filter means another user's token is reported as `deleted: 0`
+ * rather than being removed or disclosed.
+ */
+export async function deleteDeviceTokens(userId: number, token?: string) {
+  const result = await prisma.deviceToken.deleteMany({
+    where: token === undefined ? { userId } : { userId, token },
+  });
+  return { deleted: result.count };
+}
+
 export interface HighRiskAlertInput {
   predictionId: number;
   assetId: number;
@@ -130,21 +168,32 @@ export interface HighRiskAlertInput {
   recommendation: string;
 }
 
+export interface HighRiskAlertResult {
+  created: number;
+  recipients: number[];
+  title: string;
+  message: string;
+}
+
 /**
  * Creates one AI_ALERT per active user for a HIGH prediction. Runs inside the
  * caller's transaction; the existing-row check makes a retry idempotent for
- * the same prediction id.
+ * the same prediction id. The caller dispatches the push after the transaction
+ * commits, using the returned recipients and copy.
  */
 export async function createHighRiskAlerts(
   tx: Prisma.TransactionClient,
   input: HighRiskAlertInput,
-): Promise<number> {
+): Promise<HighRiskAlertResult> {
+  const title = `AI Alert: ${input.assetCode} risiko HIGH`;
+  const message = `Prediksi risiko ${input.riskScore}/100 (HIGH) untuk ${input.assetCode} - ${input.assetName}. ${input.recommendation}`;
+
   const users = await tx.user.findMany({
     where: { isActive: true },
     select: { id: true },
   });
   if (users.length === 0) {
-    return 0;
+    return { created: 0, recipients: [], title, message };
   }
 
   const existing = await tx.notification.findMany({
@@ -157,7 +206,7 @@ export async function createHighRiskAlerts(
   const alreadyAlerted = new Set(existing.map((row) => row.userId));
   const recipients = users.filter((user) => !alreadyAlerted.has(user.id));
   if (recipients.length === 0) {
-    return 0;
+    return { created: 0, recipients: [], title, message };
   }
 
   const created = await tx.notification.createMany({
@@ -166,9 +215,14 @@ export async function createHighRiskAlerts(
       assetId: input.assetId,
       predictionId: input.predictionId,
       type: 'AI_ALERT',
-      title: `AI Alert: ${input.assetCode} risiko HIGH`,
-      message: `Prediksi risiko ${input.riskScore}/100 (HIGH) untuk ${input.assetCode} - ${input.assetName}. ${input.recommendation}`,
+      title,
+      message,
     })),
   });
-  return created.count;
+  return {
+    created: created.count,
+    recipients: recipients.map((user) => user.id),
+    title,
+    message,
+  };
 }

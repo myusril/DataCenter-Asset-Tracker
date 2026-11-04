@@ -5,11 +5,15 @@ import {
   startReminderJob,
   stopReminderJob,
 } from './modules/maintenance/maintenance.reminder.job.js';
+import { initPushProvider } from './modules/notification/push.provider.js';
 import { logger } from './utils/logger.js';
 
 async function bootstrap(): Promise<void> {
   await connectDatabase();
   logger.info('✅ Database connected');
+
+  // Resolves once: enabled FCM provider or a no-op with one boot warning.
+  initPushProvider();
 
   const app = createApp();
   const server = app.listen(env.PORT, () => {

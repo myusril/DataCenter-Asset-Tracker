@@ -4,6 +4,7 @@ import {
   type Prisma,
 } from '@prisma/client';
 import { prisma } from '../../config/database.js';
+import { dispatchPush } from '../notification/push.provider.js';
 import { AppError, buildPagination } from '../../utils/response.js';
 import { decimalToNumber, parseIsoDate, toIsoDate } from '../../utils/serialize.js';
 import type {
@@ -464,10 +465,44 @@ export async function createMaintenanceReminders(): Promise<ReminderScanResult> 
     }));
   });
 
-  const created = await prisma.notification.createMany({ data, skipDuplicates: true });
+  // Push must mirror only rows inserted by this statement, not the whole
+  // reminder set: otherwise every daily scan would re-notify every device.
+  // `createManyAndReturn` also keeps overlapping runs honest, since only the
+  // run that actually inserted a row dispatches its push.
+  const inserted = await prisma.notification.createManyAndReturn({
+    data,
+    skipDuplicates: true,
+  });
+
+  const byMaintenance = new Map<number, typeof inserted>();
+  for (const row of inserted) {
+    const group = byMaintenance.get(row.maintenanceId as number) ?? [];
+    group.push(row);
+    byMaintenance.set(row.maintenanceId as number, group);
+  }
+  for (const [maintenanceId, group] of byMaintenance) {
+    const first = group[0];
+    if (!first) {
+      continue;
+    }
+    dispatchPush(
+      group.map((row) => row.userId),
+      {
+        title: first.title,
+        body: first.message,
+        data: {
+          type: 'MAINTENANCE_REMINDER',
+          assetId: String(first.assetId),
+          maintenanceId: String(maintenanceId),
+          deepLink: `/maintenance/${maintenanceId}`,
+        },
+      },
+    );
+  }
+
   return {
     scanned: dueRows.length,
-    created: created.count,
-    skipped: data.length - created.count,
+    created: inserted.length,
+    skipped: data.length - inserted.length,
   };
 }

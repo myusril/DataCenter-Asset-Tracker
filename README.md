@@ -4,8 +4,9 @@ Aplikasi inventaris dan asset tracking data center untuk teknisi dan administrat
 (server, switch, router, storage, firewall, rack), riwayat lokasi, informasi jaringan, riwayat
 maintenance, serta prediksi risiko untuk preventive maintenance.
 
-- Backend: REST API **Express 5 + TypeScript + Prisma 6.19.3 + PostgreSQL 16**, 40 endpoint
-  (37 dari dokumen + 3 ekstensi: jadwal/pengingat maintenance dan profil sendiri), 7 tabel.
+- Backend: REST API **Express 5 + TypeScript + Prisma 6.19.3 + PostgreSQL 16**, 42 endpoint
+  (37 dari dokumen + 5 ekstensi: jadwal/pengingat maintenance, profil sendiri, dan pendaftaran
+  perangkat push), 8 tabel.
 - Mobile: aplikasi **Expo SDK 58 / React Native 0.88** (Expo Router, Zustand, axios) untuk Android
   (HP fisik) dan web.
 - Mesin risiko: **heuristik deterministik 3 lapisan** (aturan berbobot + statistik + pencocokan pola),
@@ -45,8 +46,10 @@ lengkap ada di bagian [Riwayat pengembangan](#riwayat-pengembangan).
 - Network: upsert per aset, update, hapus, simulasi cek koneksi (80% Online / 20% Offline), statistik.
 - AI: prediksi tunggal/batch, riwayat prediksi berversi (`isActive`), explain tanpa menyimpan, ringkasan
   risiko dashboard, alert otomatis untuk prediksi HIGH.
-- Notification: 7 endpoint dengan scoping per user, unread count, mark read, mark all, hapus satu,
-  hapus yang sudah dibaca.
+- Notification: 9 endpoint dengan scoping per user, unread count, mark read, mark all, hapus satu,
+  hapus yang sudah dibaca, serta pendaftaran/penghapusan token FCM perangkat.
+- Push FCM: `AI_ALERT` dan `MAINTENANCE_REMINDER` dikirim ke perangkat setelah baris notifikasi
+  commit; provider menjadi no-op saat `PUSH_ENABLED=false` atau service account belum tersedia.
 
 **Mobile**
 
@@ -83,14 +86,14 @@ lengkap ada di bagian [Riwayat pengembangan](#riwayat-pengembangan).
 ```
 ┌──────────────────────────┐        HTTP/JSON        ┌───────────────────────────┐
 │  Mobile (Expo SDK 58)    │  Authorization: Bearer  │  Backend (Express 5, TS)  │
-│  Expo Router + Zustand   │ ──────────────────────> │  40 endpoint REST         │
+│  Expo Router + Zustand   │ ──────────────────────> │  42 endpoint REST         │
 │  axios + AsyncStorage    │ <────────────────────── │  JWT + bcrypt + Zod       │
 └──────────────────────────┘                         └─────────────┬─────────────┘
                                                                    │ Prisma 6.19.3
                                                                    ▼
                                                      ┌───────────────────────────┐
                                                      │  PostgreSQL 16 (port 5433)│
-                                                     │  7 tabel + enum           │
+                                                     │  8 tabel + enum           │
                                                      └───────────────────────────┘
 ```
 
@@ -242,7 +245,7 @@ berlevel **Tinggi** membuat notifikasi `AI_ALERT` untuk setiap user aktif. Conto
 ```
 .
 ├── backend/
-│   ├── prisma/               # schema 7 tabel + seed demo
+│   ├── prisma/               # schema 8 tabel + seed demo
 │   ├── scripts/test-db.sh    # prepare / truncate / drop database test
 │   ├── test/support/         # helper truncate + fixture test
 │   └── src/
@@ -263,8 +266,10 @@ berlevel **Tinggi** membuat notifikasi `AI_ALERT` untuk setiap user aktif. Conto
 │   │   └── utils/            # format tanggal/angka, warna pill
 │   └── README.md
 └── docs/
-    ├── API_CONTRACT.md       # kontrak 40 endpoint (37 dokumen + 3 ekstensi)
+    ├── API_CONTRACT.md       # kontrak 42 endpoint (37 dokumen + 5 ekstensi)
     ├── HANDOFF.md            # status & cara melanjutkan
+    ├── adr/0001-direct-fcm-push-notifications.md
+    ├── product/personal-data.md  # inventaris data pribadi (token FCM)
     └── scripts/smoke.sh      # smoke test alur API
 ```
 
@@ -276,12 +281,12 @@ bagian dokumen ke hasil yang benar-benar ada di repository.
 | Bagian dokumen | Tuntutan | Yang dikerjakan |
 |---|---|---|
 | §3 Struktur project | Backend moduler + mobile Expo | Backend `src/modules/*` (6 modul) dan mobile di `mobile/` dengan route `src/app/...` |
-| §4 Database schema | 7 tabel + enum | 7 tabel Prisma (`users`, `assets`, `asset_locations`, `network_information`, `maintenance_history`, `ai_predictions`, `notifications`) + 7 enum |
-| §5 Backend modules | Auth 3, Asset 6, Maintenance 7, Network 8, AI 6, Notification 7 | **40 endpoint** = 37 sesuai tabel §7.1 + 3 ekstensi: jadwal/pengingat maintenance dan `PATCH /api/users/me` (`docs/API_CONTRACT.md`) |
+| §4 Database schema | 7 tabel + enum | 8 tabel Prisma (`users`, `assets`, `asset_locations`, `network_information`, `maintenance_history`, `ai_predictions`, `notifications`, `device_tokens`) + 8 enum |
+| §5 Backend modules | Auth 3, Asset 6, Maintenance 7, Network 8, AI 6, Notification 7 | **42 endpoint** = 37 sesuai tabel §7.1 + 5 ekstensi: jadwal/pengingat maintenance, `PATCH /api/users/me`, dan 2 endpoint perangkat push (`docs/API_CONTRACT.md`) |
 | §6 AI hybrid engine | 3 lapisan, contoh 83.5 HIGH | 3 lapisan seperti dijelaskan di atas; contoh SRV-001 direproduksi (69.5 + 5 + 9) |
 | §8.1 Test flow | Health, login, create asset, maintenance, predict, notifications | Dijalankan; hasil di tabel "Hasil pengujian" |
 | §8.2 Checklist | 9 baris fitur | Diisi dengan bukti pengamatan nyata (lihat tabel berikut) |
-| §11.2 TODO Production | Unit test Jest minimal 70% coverage | 13 suite / 133 test; statements 89.81%, lines 89.78%, functions 93.59%, branches 74.18% (threshold ditegakkan di `jest.config.mjs`) |
+| §11.2 TODO Production | Unit test Jest minimal 70% coverage | 14 suite / 143 test; statements 89.75%, lines 89.72%, functions 94.19%, branches 73.56% (threshold ditegakkan di `jest.config.mjs`) |
 | §12.1 Sprint 1–4 mobile | Foundation → auth → dashboard/aset → operasional/AI | 4 fase mobile selesai (dashboard, aset, detail 4 tab, maintenance, jaringan, AI, notifikasi, form admin, profil) |
 | Fase 1 Asset management (roadmap) | List, search, filter, detail, navigasi | Selesai |
 | Fase 2 Operational features | Maintenance list/detail, network screen | Selesai |
@@ -410,6 +415,45 @@ Verifikasi perangkat pada **Infinix X6882** (Android 14, Expo Go) dengan backend
 - Teknisi (Budi Santoso) dapat mengubah profilnya sendiri ("Budi Teknisi", toast sukses, avatar "BT"),
   lalu nilainya dikembalikan. Tidak ada kontrol untuk mengubah user lain.
 
+### Brief 11 — push notification FCM (4 November 2026)
+
+`npm run test:coverage` pada branch `feat/push-notifications`: **14 suite, 143 test lulus** (migrasi
+baru `20261104120000_add_device_tokens`, 2 endpoint perangkat, total **42 endpoint**).
+
+| Metrik | Hasil terukur | Threshold |
+|---|---|---|
+| Statements | 955/1064 (**89.75%**) | 70% |
+| Branches | 281/382 (**73.56%**) | 60% |
+| Functions | 211/224 (**94.19%**) | 70% |
+| Lines | 943/1051 (**89.72%**) | 70% |
+
+Suite `push.test.ts` berisi 10 test: upsert token yang sama tanpa duplikat, pemindahan token ke user
+yang sedang login, validasi 400, 401, hapus satu/semua hanya milik pemanggil, hapus token user lain
+ditolak dengan `deleted: 0`, push `AI_ALERT` setelah prediksi HIGH commit (tanpa push untuk LOW),
+push `MAINTENANCE_REMINDER` hanya untuk baris yang baru dibuat (eksekusi kedua tidak mengirim ulang),
+pemangkasan token `registration-token-not-registered`/`invalid-argument`, kegagalan sementara tidak
+memangkas token, dan provider no-op saat `PUSH_ENABLED=false` atau service account tidak ada.
+
+Build release Android berhasil dengan `google-services.json` (file tidak di-commit):
+`npx expo prebuild --platform android --no-install` lalu `./gradlew assembleRelease` →
+`BUILD SUCCESSFUL`; Gradle memakai plugin `com.google.gms.google-services`. Verifikasi perangkat pada
+**Infinix X6882** (Android 14) dengan backend lokal (`adb reverse tcp:3000 tcp:3000`):
+
+- Setelah login, dialog izin notifikasi muncul satu kali (`/tmp/push-permission.png`); setelah
+  **Izinkan**, database berisi **1** baris `device_tokens`, panjang token **142**, platform
+  **ANDROID** (token tidak pernah dicetak). Membuka ulang aplikasi tidak menambah baris (tetap 1).
+- Logout menghapus baris tersebut (hitungan kembali **0**) dan aplikasi kembali ke layar login.
+- Backend lokal menulis satu peringatan saat boot: push nonaktif karena `PUSH_ENABLED=false`.
+- Untuk menjangkau backend `http://localhost:3000`, APK uji lokal memakai manifest hasil generate
+  yang ditambahi `usesCleartextTraffic="true"`; perubahan itu hanya ada di `android/` yang
+  di-ignore dan **tidak** masuk commit.
+
+**Belum diverifikasi:** pengiriman FCM end-to-end. Mesin ini tidak memiliki service account Firebase,
+jadi `PUSH_ENABLED=false` dan provider menjadi no-op; tidak ada pesan dari Firebase Console yang
+dikirim ke perangkat dan tidak ada klaim delivery. Yang tersisa untuk mahasiswa: letakkan service
+account (mode `600`) di server, set `PUSH_ENABLED=true` + `FIREBASE_SERVICE_ACCOUNT`, deploy backend,
+lalu kirim pesan uji dari Firebase Console ke APK yang dibangun dengan `google-services.json`.
+
 ### Alur aplikasi (emulator Android dan web)
 
 | Alur | Platform | Hasil yang diamati |
@@ -464,8 +508,8 @@ Batasan yang diketahui:
 - Uji di HP fisik belum dilakukan; verifikasi UI memakai emulator Android dan web.
 
 Non-goals (tidak dikerjakan): Fase 6 (EAS build, APK/IPA, distribusi), HTTPS, rate limiting, Sentry,
-Docker, CI/CD, push notification, mode offline SQLite, unggah gambar, export PDF/Excel, dark mode, QR
-scanner, adaptive weight, dan direktori `ai-service/`.
+Docker, CI/CD, iOS APNs, topik/segmen push, push terjadwal, mode offline SQLite, unggah gambar,
+export PDF/Excel, dark mode, QR scanner, adaptive weight, dan direktori `ai-service/`.
 
 ## Riwayat pengembangan
 

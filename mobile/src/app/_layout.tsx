@@ -8,19 +8,29 @@ import {
 } from '@expo-google-fonts/plus-jakarta-sans';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, Stack } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import { router, Stack, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { setUnauthorizedHandler } from '../api/session';
+import {
+  configurePushNotifications,
+  registerPushToken,
+  subscribeToPushTokenRefresh,
+} from '../notifications/push';
 import { useAuthStore } from '../store/auth';
 import { useNotificationStore } from '../store/notifications';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { gradients } from '../theme/tokens';
 import { text } from '../theme/typography';
+
+// Foreground presentation and the Android channel must exist before any
+// notification arrives, so both are configured at module scope.
+configurePushNotifications();
 
 // Registered at module scope so a 401 from a screen's first fetch is handled
 // even before any effect has run. `client.ts` only calls this seam.
@@ -37,8 +47,39 @@ useAuthStore.subscribe((state, previous) => {
   }
 });
 
+let coldStartResponseHandled = false;
+
+/**
+ * Push taps carry `{ type, assetId?, maintenanceId? }` as FCM data strings.
+ * Reminders open the maintenance detail; AI alerts and any fallback open the
+ * asset detail. Anonymous taps are ignored.
+ */
+function openNotificationTarget(data: Record<string, unknown> | undefined): void {
+  if (!data || !useAuthStore.getState().token) {
+    return;
+  }
+
+  const type = typeof data.type === 'string' ? data.type : '';
+  const maintenanceId = Number(data.maintenanceId);
+  const assetId = Number(data.assetId);
+
+  if (
+    type === 'MAINTENANCE_REMINDER' &&
+    Number.isInteger(maintenanceId) &&
+    maintenanceId > 0
+  ) {
+    router.push(`/maintenance/${maintenanceId}` as Href);
+    return;
+  }
+
+  if (Number.isInteger(assetId) && assetId > 0) {
+    router.push(`/asset/${assetId}` as Href);
+  }
+}
+
 export default function RootLayout() {
   const isHydrated = useAuthStore((state) => state.isHydrated);
+  const token = useAuthStore((state) => state.token);
   const [fontsLoaded, fontError] = useFonts({
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
@@ -53,9 +94,41 @@ export default function RootLayout() {
     }
   }, []);
 
+  // Register after login and after auto-login; the backend upserts by token, so
+  // repeated launches are idempotent.
+  useEffect(() => {
+    if (!token) {
+      return;
+    }
+    void registerPushToken();
+  }, [token]);
+
+  useEffect(() => subscribeToPushTokenRefresh(), []);
+
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      openNotificationTarget(response.notification.request.content.data);
+    });
+    return () => subscription.remove();
+  }, []);
+
   // The splash is gated on both the font assets and the persisted session, so
   // the first painted screen already has the real typeface and the right route.
   const ready = (fontsLoaded || fontError !== null) && isHydrated;
+
+  // A tap that launched the app is delivered once; handle it after the router
+  // and the persisted session are ready.
+  useEffect(() => {
+    if (!ready || coldStartResponseHandled) {
+      return;
+    }
+    coldStartResponseHandled = true;
+    void Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response) {
+        openNotificationTarget(response.notification.request.content.data);
+      }
+    });
+  }, [ready]);
 
   if (!ready) {
     return <Splash />;
