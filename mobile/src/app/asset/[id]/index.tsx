@@ -68,6 +68,10 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]['key'];
 
+function isTabKey(value: string | undefined): value is TabKey {
+  return TABS.some((entry) => entry.key === value);
+}
+
 const FACTOR_LABELS: Record<string, string> = {
   frequency: 'Frekuensi maintenance',
   incidents: 'Insiden perbaikan',
@@ -89,14 +93,14 @@ export default function AssetDetailScreen() {
   const insets = useSafeAreaInsets();
   const isAdmin = useIsAdmin();
   const refreshUnread = useNotificationStore((state) => state.refreshUnread);
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, tab: tabParam } = useLocalSearchParams<{ id: string; tab?: string }>();
   const assetId = Number(id);
 
   const [asset, setAsset] = useState<AssetDetail | null>(null);
   const [maintenance, setMaintenance] = useState<MaintenanceRecord[]>([]);
   const [maintenanceError, setMaintenanceError] = useState<string | null>(null);
   const [explanation, setExplanation] = useState<RiskExplanation | null>(null);
-  const [tab, setTab] = useState<TabKey>('general');
+  const [tab, setTab] = useState<TabKey>(isTabKey(tabParam) ? tabParam : 'general');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -162,6 +166,12 @@ export default function AssetDetailScreen() {
       void load();
     }, [load]),
   );
+
+  useEffect(() => {
+    if (isTabKey(tabParam)) {
+      setTab(tabParam);
+    }
+  }, [tabParam]);
 
   useEffect(() => {
     if (!predictNotice) {
