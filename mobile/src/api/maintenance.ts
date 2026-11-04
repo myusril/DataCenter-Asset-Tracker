@@ -2,8 +2,10 @@ import { api } from './client';
 import type {
   ApiEnvelope,
   MaintenanceRecord,
+  MaintenanceSchedule,
   MaintenanceType,
   Paginated,
+  ReminderScanResult,
 } from '../types/api';
 
 export interface MaintenanceListParams {
@@ -59,6 +61,34 @@ export async function createMaintenanceRecord(
   const response = await api.post<ApiEnvelope<MaintenanceRecord>>(
     '/api/maintenance',
     payload,
+  );
+  return response.data.data;
+}
+
+export interface MaintenanceScheduleParams {
+  window?: 7 | 30;
+  includeOverdue?: boolean;
+}
+
+export async function fetchMaintenanceSchedule(
+  params: MaintenanceScheduleParams = {},
+): Promise<MaintenanceSchedule> {
+  const response = await api.get<ApiEnvelope<MaintenanceSchedule>>(
+    '/api/maintenance/schedule',
+    {
+      params: {
+        window: params.window ?? 30,
+        includeOverdue: params.includeOverdue ?? true,
+      },
+    },
+  );
+  return response.data.data;
+}
+
+/** Admin-only: fans out reminders for overdue and ≤7-day schedules. */
+export async function runMaintenanceReminders(): Promise<ReminderScanResult> {
+  const response = await api.post<ApiEnvelope<ReminderScanResult>>(
+    '/api/maintenance/reminders',
   );
   return response.data.data;
 }

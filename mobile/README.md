@@ -24,6 +24,10 @@ grafik.
 - **Maintenance** — daftar seluruh riwayat dengan filter jenis, pagination, pull-to-refresh; halaman
   detail menampilkan aset, tanggal, teknisi, biaya, jadwal berikutnya, uraian, dan hasil. Admin dapat
   menambah catatan lewat form dengan pemilih aset yang bisa dicari.
+- **Jadwal maintenance** — layar `/schedule` dengan tab **Terlewat / 7 hari / 30 hari** beserta
+  jumlahnya, baris terlewat lebih dulu (tanggal jatuh tempo, sisa/lewat hari, hasil terakhir), empty
+  state per tab, dan pull-to-refresh. Dashboard menampilkan kartu jadwal dengan jumlah terlewat.
+  Admin mendapat aksi **Jalankan pengingat** (konfirmasi + ringkasan `scanned/created/skipped`).
 - **Jaringan** — daftar perangkat dengan status koneksi, pencarian hostname/IP, filter status, waktu
   cek terakhir. Admin mendapat aksi **Cek** yang memperbarui baris dan menampilkan ringkasan hasil.
 - **Risiko** — skor rata-rata dalam arc gauge, jumlah per level, penjelasan tiga lapisan (aturan,
@@ -31,7 +35,9 @@ grafik.
   aset, dan tombol **Prediksi semua aset** (admin) dengan ringkasan hasil.
 - **Notifikasi** — urutan belum dibaca lebih dulu, badge pada tab, tandai dibaca saat diketuk, menu
   **Kelola** (ikon tiga titik) untuk menandai semua dibaca dan menghapus yang sudah dibaca (dengan
-  konfirmasi), hapus satu, waktu relatif, dan ketuk alert AI untuk membuka detail aset.
+  konfirmasi), hapus satu, waktu relatif, dan ketuk notifikasi untuk membuka tujuannya: alert AI →
+  detail aset, pengingat maintenance → detail maintenance (atau tab Maintenance aset bila catatan
+  sudah dihapus). Ikon pengingat memakai warna amber.
 - **Form admin aset** — bagian Umum, Lokasi, dan Jaringan; validasi inline tanpa library schema;
   prefill saat mengedit; pesan konflik 409 yang terbaca (kode/serial duplikat, aset masih punya
   riwayat).
@@ -190,6 +196,7 @@ mobile/
     │   ├── asset/           # new.tsx, [id]/index.tsx, [id]/edit.tsx
     │   ├── maintenance.tsx  # daftar maintenance
     │   ├── maintenance/     # [id].tsx, new.tsx
+    │   ├── schedule.tsx     # jadwal maintenance + trigger pengingat (admin)
     │   └── network.tsx      # daftar jaringan
     ├── components/          # primitif desain: GradientHeader, ChartCard, DonutChart, BarChart, RiskGauge, SegmentedTabs, Skeleton, Sheet, Toast + komponen lama
     ├── hooks/               # useIsAdmin, useReducedMotion, useCountUp
@@ -253,6 +260,20 @@ lain. Gejalanya: `adb exec-out screencap` menghasilkan 0 byte, `adb pull` gagal 
 `Transport endpoint is not connected`, dan dialog "System UI isn't responding". Alur form aset sampai
 tersimpan, form maintenance, teknisi, dan logout diverifikasi di web; lihat tabel platform.
 
+### Brief 9 — HP fisik (4 November 2026)
+
+Verifikasi pada **Infinix X6882** (Android 14, Expo Go) memakai backend lokal dan database test berisi
+seed, dengan `adb reverse` untuk port 3000 dan 8081.
+
+| Alur | Hasil yang diamati |
+|---|---|
+| Kartu dashboard | **Jadwal Maintenance**: 1 terlewat, 2 ≤ 7 hari, 2 8–30 hari, plus peringatan "1 jadwal sudah lewat tanggal" |
+| Tab jadwal | Terlewat (1) menampilkan STG-001 (28 Okt 2026, terlewat 7 hari, hasil terakhir tampil); 7 hari (2) menampilkan SRV-001 dan SW-001; 30 hari (4) menambahkan FW-001 dan SRV-003 |
+| Jalankan pengingat (admin) | Dialog konfirmasi, lalu "Tidak ada pengingat baru. 3 jadwal dipindai, 6 sudah pernah dikirim." pada eksekusi kedua |
+| Notifikasi | Tiga `MAINTENANCE_REMINDER` dengan ikon amber; ketuk → detail maintenance SW-001 |
+| Catatan dihapus | Setelah baris maintenance dihapus, ketuk pengingat STG-001 membuka `/asset/5?tab=maintenance` dan tab **Maintenance** langsung aktif |
+| Teknisi | Layar jadwal tanpa kartu/aksi pengingat; tab dan empty state tetap berfungsi |
+
 ### Batasan
 
 - Tombol back perangkat pada emulator Expo Go tidak memicu navigasi; tombol back di header berfungsi.
@@ -265,4 +286,4 @@ tersimpan, form maintenance, teknisi, dan logout diverifikasi di web; lihat tabe
 - Backend lokal memakai HTTP tanpa TLS.
 - Prediksi AI adalah heuristik deterministik (aturan + statistik + pola), bukan model machine learning
   yang dilatih; tidak ada klaim akurasi.
-- Uji di HP fisik belum dilakukan.
+- Pengingat maintenance hanya in-app; tidak ada push notification, email, atau WhatsApp.

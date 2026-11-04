@@ -9,6 +9,7 @@ import { decimalToNumber, parseIsoDate, toIsoDate } from '../../utils/serialize.
 import type {
   CreateMaintenanceInput,
   ListMaintenanceQuery,
+  ScheduleQuery,
   UpdateMaintenanceInput,
 } from './maintenance.schema.js';
 
@@ -264,5 +265,209 @@ export async function getMaintenanceStatistics() {
     totalCost: decimalToNumber(costAggregate._sum.cost) ?? 0,
     thisMonthCount,
     upcomingSchedules,
+  };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Reminders go out for overdue rows and rows due within this many days. */
+export const REMINDER_HORIZON_DAYS = 7;
+/** The board view (used for the tab counts) always spans overdue + 30 days. */
+const BOARD_WINDOW_DAYS = 30;
+const DUE_SOON_DAYS = 7;
+
+export type ScheduleState = 'OVERDUE' | 'DUE_SOON' | 'UPCOMING';
+
+const scheduleInclude = {
+  asset: {
+    select: {
+      id: true,
+      assetCode: true,
+      assetName: true,
+      assetType: true,
+      status: true,
+    },
+  },
+} satisfies Prisma.MaintenanceHistoryInclude;
+
+type ScheduleRow = Prisma.MaintenanceHistoryGetPayload<{
+  include: typeof scheduleInclude;
+}>;
+
+/** Date-only schedules live at UTC midnight; "today" is the UTC date. */
+function utcToday(): Date {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+function addDays(date: Date, days: number): Date {
+  return new Date(date.getTime() + days * DAY_MS);
+}
+
+function daysUntil(today: Date, date: Date): number {
+  return Math.round((date.getTime() - today.getTime()) / DAY_MS);
+}
+
+function scheduleState(days: number): ScheduleState {
+  if (days < 0) {
+    return 'OVERDUE';
+  }
+  return days <= DUE_SOON_DAYS ? 'DUE_SOON' : 'UPCOMING';
+}
+
+const MONTHS_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'Mei',
+  'Jun',
+  'Jul',
+  'Agu',
+  'Sep',
+  'Okt',
+  'Nov',
+  'Des',
+];
+
+function formatDueDate(value: Date): string {
+  return `${value.getUTCDate()} ${MONTHS_SHORT[value.getUTCMonth()]} ${value.getUTCFullYear()}`;
+}
+
+function reminderMessage(row: ScheduleRow, days: number): string {
+  const due = row.nextSchedule ? formatDueDate(row.nextSchedule) : '-';
+  const timing =
+    days < 0
+      ? `terlewat ${Math.abs(days)} hari`
+      : days === 0
+        ? 'jatuh tempo hari ini'
+        : `dalam ${days} hari`;
+  const result = row.result?.trim();
+  const lastResult =
+    result && result.length > 0
+      ? ` Hasil terakhir: ${result.length > 180 ? `${result.slice(0, 180)}...` : result}.`
+      : ' Belum ada hasil perawatan yang dicatat.';
+  return `Jadwal maintenance ${row.asset.assetCode} (${row.asset.assetName}) ${timing} - jatuh tempo ${due}.${lastResult}`;
+}
+
+/**
+ * A flat, overdue-first view of every `nextSchedule` within the board window.
+ * `items` honours the requested window and `includeOverdue`; `counts` always
+ * covers the whole board (overdue + 30 days) so the UI tabs keep stable
+ * badges while the list changes.
+ */
+export async function getMaintenanceSchedule(query: ScheduleQuery) {
+  const today = utcToday();
+  const boardEnd = addDays(today, BOARD_WINDOW_DAYS);
+
+  const rows = await prisma.maintenanceHistory.findMany({
+    where: { nextSchedule: { not: null, lte: boardEnd } },
+    include: scheduleInclude,
+    orderBy: [{ nextSchedule: 'asc' }, { id: 'asc' }],
+  });
+
+  const counts = { overdue: 0, dueSoon: 0, upcoming: 0, total: 0 };
+  const bucket: Record<ScheduleState, 'overdue' | 'dueSoon' | 'upcoming'> = {
+    OVERDUE: 'overdue',
+    DUE_SOON: 'dueSoon',
+    UPCOMING: 'upcoming',
+  };
+  const items: Array<{
+    maintenanceId: number;
+    assetId: number;
+    asset: ScheduleRow['asset'];
+    maintenanceType: ScheduleRow['maintenanceType'];
+    maintenanceDate: string | null;
+    nextSchedule: string | null;
+    daysUntil: number;
+    state: ScheduleState;
+    lastResult: string | null;
+  }> = [];
+
+  for (const row of rows) {
+    if (!row.nextSchedule) {
+      continue;
+    }
+    const days = daysUntil(today, row.nextSchedule);
+    const state = scheduleState(days);
+    counts[bucket[state]] += 1;
+    counts.total += 1;
+
+    if (days > query.window || (state === 'OVERDUE' && !query.includeOverdue)) {
+      continue;
+    }
+
+    items.push({
+      maintenanceId: row.id,
+      assetId: row.assetId,
+      asset: row.asset,
+      maintenanceType: row.maintenanceType,
+      maintenanceDate: toIsoDate(row.maintenanceDate),
+      nextSchedule: toIsoDate(row.nextSchedule),
+      daysUntil: days,
+      state,
+      lastResult: row.result,
+    });
+  }
+
+  return {
+    window: query.window,
+    includeOverdue: query.includeOverdue,
+    today: toIsoDate(today),
+    counts,
+    items,
+  };
+}
+
+export interface ReminderScanResult {
+  scanned: number;
+  created: number;
+  skipped: number;
+}
+
+/**
+ * Fans out `MAINTENANCE_REMINDER` rows to every active user for schedules that
+ * are overdue or due within {@link REMINDER_HORIZON_DAYS}. The unique
+ * `(userId, dedupeKey)` index makes repeated runs idempotent; deleting a
+ * notification frees its key, so a later run may recreate it.
+ */
+export async function createMaintenanceReminders(): Promise<ReminderScanResult> {
+  const today = utcToday();
+  const horizonEnd = addDays(today, REMINDER_HORIZON_DAYS);
+
+  const [dueRows, users] = await Promise.all([
+    prisma.maintenanceHistory.findMany({
+      where: { nextSchedule: { not: null, lte: horizonEnd } },
+      include: scheduleInclude,
+      orderBy: [{ nextSchedule: 'asc' }, { id: 'asc' }],
+    }),
+    prisma.user.findMany({ where: { isActive: true }, select: { id: true } }),
+  ]);
+
+  if (dueRows.length === 0 || users.length === 0) {
+    return { scanned: dueRows.length, created: 0, skipped: 0 };
+  }
+
+  const data = dueRows.flatMap((row) => {
+    if (!row.nextSchedule) {
+      return [];
+    }
+    const days = daysUntil(today, row.nextSchedule);
+    const dedupeKey = `${row.id}:${toIsoDate(row.nextSchedule)}`;
+    return users.map((user) => ({
+      userId: user.id,
+      assetId: row.assetId,
+      maintenanceId: row.id,
+      type: 'MAINTENANCE_REMINDER' as const,
+      title: `Pengingat maintenance: ${row.asset.assetCode}`,
+      message: reminderMessage(row, days),
+      dedupeKey,
+    }));
+  });
+
+  const created = await prisma.notification.createMany({ data, skipDuplicates: true });
+  return {
+    scanned: dueRows.length,
+    created: created.count,
+    skipped: data.length - created.count,
   };
 }

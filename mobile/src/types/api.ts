@@ -143,7 +143,48 @@ export interface AppNotification {
   createdAt: string;
   assetId: number | null;
   predictionId: number | null;
+  maintenanceId: number | null;
+  dedupeKey: string | null;
   asset: { id: number; assetCode: string; assetName: string } | null;
+}
+
+export type ScheduleState = 'OVERDUE' | 'DUE_SOON' | 'UPCOMING';
+
+export interface MaintenanceScheduleItem {
+  maintenanceId: number;
+  assetId: number;
+  asset: {
+    id: number;
+    assetCode: string;
+    assetName: string;
+    assetType: AssetType;
+    status: AssetStatus;
+  };
+  maintenanceType: MaintenanceType;
+  maintenanceDate: string | null;
+  nextSchedule: string | null;
+  daysUntil: number;
+  state: ScheduleState;
+  lastResult: string | null;
+}
+
+export interface MaintenanceSchedule {
+  window: 7 | 30;
+  includeOverdue: boolean;
+  today: string;
+  counts: {
+    overdue: number;
+    dueSoon: number;
+    upcoming: number;
+    total: number;
+  };
+  items: MaintenanceScheduleItem[];
+}
+
+export interface ReminderScanResult {
+  scanned: number;
+  created: number;
+  skipped: number;
 }
 
 export interface PredictionResult {

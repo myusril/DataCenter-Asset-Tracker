@@ -8,7 +8,8 @@ dulu, bukan dilakukan diam-diam saat mengerjakan mobile.
 - Content type: `application/json`
 - Semua endpoint selain `GET /health`, `POST /api/auth/register`, dan `POST /api/auth/login`
   membutuhkan header `Authorization: Bearer <token>`.
-- Total endpoint: **37** (Auth 3, Asset 6, Maintenance 7, Network 8, AI 6, Notification 7).
+- Total endpoint: **39** = 37 dari dokumen (Auth 3, Asset 6, Maintenance 7, Network 8, AI 6,
+  Notification 7) + **2 ekstensi** jadwal dan pengingat maintenance.
 
 ## 1. Response envelope
 
@@ -305,6 +306,8 @@ hanya **ADMIN**.
 |---|---|---|---|
 | GET | `/api/maintenance` | semua role | List + filter + pagination |
 | GET | `/api/maintenance/statistics` | semua role | Statistik |
+| GET | `/api/maintenance/schedule` | semua role | Jadwal terlewat dan mendatang (ekstensi) |
+| POST | `/api/maintenance/reminders` | ADMIN | Buat ulang pengingat idempoten (ekstensi) |
 | GET | `/api/maintenance/asset/:assetId` | semua role | Riwayat satu aset, tanggal menurun |
 | GET | `/api/maintenance/:id` | semua role | Detail |
 | POST | `/api/maintenance` | ADMIN | Buat riwayat |
@@ -368,6 +371,83 @@ tidak ada → **404**. Body update tidak boleh mengubah `assetId`.
 
 `upcomingSchedules` menghitung riwayat dengan `nextSchedule` antara hari ini dan 30 hari ke depan.
 `thisMonthCount` menghitung `maintenanceDate` pada bulan berjalan.
+
+### Jadwal maintenance (ekstensi)
+
+Dokumen sumber tidak memiliki endpoint jadwal; endpoint ini **aditif** dan tidak mengubah bentuk
+endpoint maintenance yang sudah ada.
+
+```
+GET /api/maintenance/schedule?window=7|30&includeOverdue=true|false
+```
+
+Token wajib (**401** tanpa token) dan tersedia untuk kedua role. `window` hanya menerima `7` atau
+`30` (default `30`); nilai lain → **400**. `includeOverdue` default `true`; nilai selain
+`"true"`/`"false"` → **400**.
+
+```json
+{
+  "window": 30,
+  "includeOverdue": true,
+  "today": "2026-11-04",
+  "counts": { "overdue": 1, "dueSoon": 2, "upcoming": 2, "total": 5 },
+  "items": [
+    {
+      "maintenanceId": 7,
+      "assetId": 5,
+      "asset": {
+        "id": 5,
+        "assetCode": "STG-001",
+        "assetName": "Storage Array",
+        "assetType": "STORAGE",
+        "status": "ACTIVE"
+      },
+      "maintenanceType": "ROUTINE",
+      "maintenanceDate": "2026-08-01",
+      "nextSchedule": "2026-10-28",
+      "daysUntil": -7,
+      "state": "OVERDUE",
+      "lastResult": "In progress - menunggu spare part"
+    }
+  ]
+}
+```
+
+- Perbandingan memakai tanggal saja (UTC): `nextSchedule < hari ini` → `OVERDUE` (`daysUntil` negatif),
+  `0…7` hari → `DUE_SOON`, `8…30` hari → `UPCOMING`.
+- `includeOverdue=false` membuang baris `OVERDUE`; `window=7` membuang `daysUntil > 7`.
+- Urutan `items`: `nextSchedule` menaik (terlewat lebih dulu), lalu `id`.
+- `counts` selalu menghitung seluruh papan (terlewat + 30 hari) agar badge tab tidak berubah saat
+  filter berganti. `counts.total = overdue + dueSoon + upcoming`.
+- Baris tanpa `nextSchedule` tidak pernah muncul.
+
+### Pengingat maintenance (ekstensi)
+
+```
+POST /api/maintenance/reminders
+```
+
+Hanya **ADMIN** (**403** untuk teknisi, **401** tanpa token). Memindai riwayat dengan `nextSchedule`
+yang terlewat atau jatuh tempo dalam 7 hari, lalu membuat satu `MAINTENANCE_REMINDER` untuk setiap
+user aktif.
+
+```json
+{ "scanned": 3, "created": 6, "skipped": 0 }
+```
+
+- `scanned` = jumlah baris jadwal yang masuk horizon pengingat.
+- `created` = jumlah notifikasi baru; `skipped` = kandidat yang sudah punya kunci yang sama.
+- Kunci idempotensi: `dedupeKey = "<maintenanceId>:<nextSchedule YYYY-MM-DD>"`, unik per
+  `(userId, dedupeKey)`. Menjalankan ulang tidak membuat duplikat (`created = 0`); mengubah
+  `nextSchedule` menghasilkan kunci baru sehingga pengingat baru boleh dibuat; notifikasi yang
+  dihapus membebaskan kuncinya dan dapat dibuat ulang.
+- Penerima: seluruh user `isActive: true`; user nonaktif tidak pernah menerima pengingat.
+- Isi: `type = MAINTENANCE_REMINDER`, `assetId` dan `maintenanceId` diisi, `predictionId = null`.
+  Judul memuat kode aset; pesan berbahasa Indonesia memuat kode/nama aset, tanggal jatuh tempo,
+  jumlah hari terlewat atau menuju jatuh tempo, dan hasil perawatan terakhir.
+- Job harian `node-cron` pukul **07.00 waktu server** memanggil fungsi service yang sama. Job hanya
+  aktif bila `REMINDER_JOB_ENABLED=true` (default `false`); pengujian memanggil service secara
+  langsung tanpa menunggu timer.
 
 ## 5. Network
 
@@ -661,11 +741,15 @@ keberadaannya tidak bocor.
   "createdAt": "2026-10-30T19:28:00.000Z",
   "assetId": 10,
   "predictionId": 16,
+  "maintenanceId": null,
+  "dedupeKey": null,
   "asset": { "id": 10, "assetCode": "SRV-001", "assetName": "WEB Server 01" }
 }
 ```
 
-`asset` dan `predictionId` bernilai `null` untuk notifikasi yang tidak terkait aset/prediksi.
+`asset`, `predictionId`, dan `maintenanceId` bernilai `null` untuk notifikasi yang tidak terkait
+aset/prediksi/jadwal. `dedupeKey` hanya diisi pada `MAINTENANCE_REMINDER` (lihat §4); `AI_ALERT`
+memiliki `maintenanceId = null` dan `dedupeKey = null`.
 
 ### Endpoint
 
@@ -691,6 +775,10 @@ judul, pesan (skor + rekomendasi), `assetId`, dan `predictionId`. Pembuatan berj
 yang sama dengan penyimpanan prediksi dan idempoten untuk `predictionId` yang sama. Prediksi MEDIUM
 dan LOW tidak membuat alert.
 
+`MAINTENANCE_REMINDER` tidak dibuat oleh mesin AI. Baris ini hanya dibuat oleh
+`POST /api/maintenance/reminders` atau job hariannya, dengan `maintenanceId`, `dedupeKey`, dan
+`assetId` terisi (lihat §4).
+
 ## 8. Health
 
 | Method | Path | Akses | `data` |
@@ -713,6 +801,7 @@ dan LOW tidak membuat alert.
 | 10 | Notifikasi milik user lain | Dijawab 404, bukan 403 |
 | 11 | `risk-summary` tidak mendefinisikan populasi hitungan | `counts`/`averageScore` dari prediksi aktif; `assetsWithoutPrediction` dari seluruh riwayat |
 | 12 | Clamp akhir 100 | Skor maksimum yang dapat dicapai adalah 99; clamp 100 adalah pengaman |
+| 13 | Dokumen tidak menyediakan endpoint jadwal/pengingat maintenance | Ditambahkan 2 endpoint ekstensi (`GET /api/maintenance/schedule`, `POST /api/maintenance/reminders`) tanpa mengubah bentuk endpoint lama; total menjadi 39 |
 
 Kontrak AI dan notification di atas dipakai oleh tahap mobile. Mesin AI tetap deterministik:
 jangan menambahkan klaim akurasi atau menyebutnya sebagai model yang dilatih.

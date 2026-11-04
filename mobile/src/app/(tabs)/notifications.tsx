@@ -47,6 +47,13 @@ const TYPE_LABELS: Record<NotificationType, string> = {
   INFO: 'Informasi',
 };
 
+const TYPE_TONES: Record<NotificationType, { ink: string; soft: string }> = {
+  AI_ALERT: { ink: colors.dangerInk, soft: colors.dangerSoft },
+  MAINTENANCE_REMINDER: { ink: colors.warningInk, soft: colors.warningSoft },
+  SYSTEM: { ink: colors.textSecondary, soft: colors.mutedSurface },
+  INFO: { ink: colors.primary, soft: colors.accentSoft },
+};
+
 export default function NotificationsScreen() {
   const router = useRouter();
   const unreadCount = useNotificationStore((state) => state.unreadCount);
@@ -106,8 +113,19 @@ export default function NotificationsScreen() {
       }
     }
 
+    if (notification.maintenanceId !== null) {
+      router.push(`/maintenance/${notification.maintenanceId}`);
+      return;
+    }
+
     if (notification.assetId !== null) {
-      router.push(`/asset/${notification.assetId}`);
+      // The maintenance row was deleted (SetNull), so fall back to the asset's
+      // Maintenance tab instead of a dead detail page.
+      router.push(
+        notification.type === 'MAINTENANCE_REMINDER'
+          ? `/asset/${notification.assetId}?tab=maintenance`
+          : `/asset/${notification.assetId}`,
+      );
     }
   }
 
@@ -340,6 +358,7 @@ function NotificationRow({
   onDelete: () => void;
 }) {
   const unread = !notification.isRead;
+  const tone = TYPE_TONES[notification.type];
 
   return (
     <View style={[styles.row, unread ? styles.rowUnread : null]}>
@@ -348,9 +367,14 @@ function NotificationRow({
         onPress={onPress}
         style={({ pressed }) => [styles.rowBody, pressed ? styles.pressed : null]}
       >
-        <View style={[styles.iconBox, unread ? styles.iconBoxUnread : null]}>
+        <View
+          style={[
+            styles.iconBox,
+            unread ? [styles.iconBoxUnread, { backgroundColor: tone.soft }] : null,
+          ]}
+        >
           <Ionicons
-            color={unread ? colors.accent : colors.muted}
+            color={unread ? tone.ink : colors.muted}
             name={TYPE_ICONS[notification.type]}
             size={18}
           />

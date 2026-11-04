@@ -4,13 +4,16 @@ import { idParamSchema } from '../../utils/validation.js';
 import {
   createMaintenanceSchema,
   listMaintenanceQuerySchema,
+  scheduleQuerySchema,
   updateMaintenanceSchema,
 } from './maintenance.schema.js';
 import {
   createMaintenance,
+  createMaintenanceReminders,
   deleteMaintenance,
   getMaintenanceById,
   getMaintenancesByAsset,
+  getMaintenanceSchedule,
   getMaintenanceStatistics,
   listMaintenances,
   updateMaintenance,
@@ -25,6 +28,17 @@ export const list: RequestHandler = async (req, res) => {
 export const statistics: RequestHandler = async (_req, res) => {
   const result = await getMaintenanceStatistics();
   sendSuccess(res, result, 'Maintenance statistics retrieved successfully');
+};
+
+export const schedule: RequestHandler = async (req, res) => {
+  const query = scheduleQuerySchema.parse(req.query);
+  const result = await getMaintenanceSchedule(query);
+  sendSuccess(res, result, 'Maintenance schedule retrieved successfully');
+};
+
+export const runReminders: RequestHandler = async (_req, res) => {
+  const result = await createMaintenanceReminders();
+  sendSuccess(res, result, 'Maintenance reminders processed successfully');
 };
 
 export const byAsset: RequestHandler = async (req, res) => {

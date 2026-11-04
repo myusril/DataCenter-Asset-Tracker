@@ -14,6 +14,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { fetchRiskSummary } from '../../api/ai';
 import { fetchAssetStatistics } from '../../api/assets';
 import { extractErrorMessage } from '../../api/client';
+import { fetchMaintenanceSchedule } from '../../api/maintenance';
 import { BarChart } from '../../components/BarChart';
 import { ChartCard } from '../../components/ChartCard';
 import { DonutChart } from '../../components/DonutChart';
@@ -27,7 +28,13 @@ import { colors } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
 import { chartColors, layout } from '../../theme/tokens';
 import { fontFamily, text } from '../../theme/typography';
-import type { AssetStatistics, AssetType, RiskLevel, RiskSummary } from '../../types/api';
+import type {
+  AssetStatistics,
+  AssetType,
+  MaintenanceSchedule,
+  RiskLevel,
+  RiskSummary,
+} from '../../types/api';
 import {
   ASSET_TYPE_LABELS,
   formatDateTime,
@@ -58,6 +65,7 @@ export default function DashboardScreen() {
 
   const [stats, setStats] = useState<AssetStatistics | null>(null);
   const [risk, setRisk] = useState<RiskSummary | null>(null);
+  const [schedule, setSchedule] = useState<MaintenanceSchedule | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,15 +81,18 @@ export default function DashboardScreen() {
     setError(null);
 
     try {
-      const [nextStats, nextRisk] = await Promise.all([
+      const [nextStats, nextRisk, nextSchedule] = await Promise.all([
         fetchAssetStatistics(),
         fetchRiskSummary(),
+        // The card is informational: a schedule failure must not hide the rest.
+        fetchMaintenanceSchedule({ window: 7, includeOverdue: true }).catch(() => null),
       ]);
       if (currentRequest !== requestId.current) {
         return;
       }
       setStats(nextStats);
       setRisk(nextRisk);
+      setSchedule(nextSchedule);
     } catch (caught) {
       if (currentRequest === requestId.current) {
         setError(extractErrorMessage(caught));
@@ -197,6 +208,60 @@ export default function DashboardScreen() {
                   value={stats.addedThisMonth}
                 />
               </View>
+
+              {schedule ? (
+                <ChartCard
+                  subtitle="Dihitung dari tanggal jadwal berikutnya pada riwayat maintenance."
+                  title="Jadwal Maintenance"
+                >
+                  <View style={styles.scheduleGrid}>
+                    <View style={styles.scheduleMetric}>
+                      <Text
+                        style={[
+                          styles.scheduleValue,
+                          schedule.counts.overdue > 0 ? styles.scheduleValueDanger : null,
+                        ]}
+                      >
+                        {schedule.counts.overdue}
+                      </Text>
+                      <Text style={styles.scheduleLabel}>terlewat</Text>
+                    </View>
+                    <View style={styles.scheduleMetric}>
+                      <Text style={styles.scheduleValue}>{schedule.counts.dueSoon}</Text>
+                      <Text style={styles.scheduleLabel}>≤ 7 hari</Text>
+                    </View>
+                    <View style={styles.scheduleMetric}>
+                      <Text style={styles.scheduleValue}>{schedule.counts.upcoming}</Text>
+                      <Text style={styles.scheduleLabel}>8–30 hari</Text>
+                    </View>
+                  </View>
+
+                  {schedule.counts.overdue > 0 ? (
+                    <View style={styles.alertCard}>
+                      <View style={styles.alertIcon}>
+                        <Ionicons color={colors.dangerInk} name="calendar-outline" size={18} />
+                      </View>
+                      <View style={styles.alertBody}>
+                        <Text style={styles.alertTitle}>
+                          {schedule.counts.overdue} jadwal sudah lewat tanggal
+                        </Text>
+                        <Text numberOfLines={2} style={styles.alertText}>
+                          Buka jadwal untuk melihat aset dan mengirim pengingat ke semua pengguna.
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => router.push('/schedule')}
+                    style={({ pressed }) => [styles.linkRow, pressed ? styles.pressed : null]}
+                  >
+                    <Text style={styles.linkLabel}>Buka jadwal maintenance</Text>
+                    <Ionicons color={colors.primary} name="arrow-forward" size={16} />
+                  </Pressable>
+                </ChartCard>
+              ) : null}
 
               <ChartCard
                 subtitle="Mesin heuristik deterministik (aturan, statistik, pola) — bukan model yang dilatih."
@@ -334,10 +399,26 @@ export default function DashboardScreen() {
                   tone={colors.warningSoft}
                 />
                 <QuickLink
+                  icon="calendar-outline"
+                  label={
+                    schedule && schedule.counts.overdue > 0
+                      ? `Jadwal · ${schedule.counts.overdue} terlewat`
+                      : 'Jadwal'
+                  }
+                  onPress={() => router.push('/schedule')}
+                  tone={schedule && schedule.counts.overdue > 0 ? colors.dangerSoft : colors.accentSoft}
+                />
+                <QuickLink
                   icon="wifi-outline"
                   label="Jaringan"
                   onPress={() => router.push('/network')}
                   tone={colors.successSoft}
+                />
+                <QuickLink
+                  icon="shield-half-outline"
+                  label="Risiko"
+                  onPress={() => router.push('/(tabs)/ai')}
+                  tone={colors.warningSoft}
                 />
                 <QuickLink
                   icon="person-outline"
@@ -496,6 +577,25 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     minWidth: 34,
     textAlign: 'right',
+  },
+  scheduleGrid: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  scheduleMetric: {
+    backgroundColor: colors.mutedSurface,
+    borderRadius: radius.sm,
+    flex: 1,
+    padding: spacing.md,
+  },
+  scheduleValue: {
+    ...text.metric,
+  },
+  scheduleValueDanger: {
+    color: colors.dangerInk,
+  },
+  scheduleLabel: {
+    ...text.small,
   },
   riskScoreRow: {
     alignItems: 'center',
