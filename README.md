@@ -292,6 +292,8 @@ berlevel **Tinggi** membuat notifikasi `AI_ALERT` untuk setiap user aktif. Conto
     └── scripts/smoke.sh      # smoke test alur API
 ```
 
+Lisensi komponen pihak ketiga: `THIRD_PARTY_NOTICES.md` di akar repository.
+
 ## Kesesuaian dengan dokumen
 
 Dokumen sumber: *DataCenter Asset Tracker — Backend & Roadmap* (31 halaman). Tabel ini memetakan
@@ -557,4 +559,5 @@ dengan `--no-ff` agar setiap fase terlihat di riwayat, ditambah satu brief pengu
 
 Detail status terakhir dan cara melanjutkan: `docs/HANDOFF.md`. Kontrak API:
 `docs/API_CONTRACT.md`. Penjelasan modul per modul, rumus risiko, model data, dan alur mobile:
-`docs/MODULES.md`. Cara memakai layar dan skenario demo: `docs/USER_GUIDE.md`.
+`docs/MODULES.md`. Cara memakai layar dan skenario demo: `docs/USER_GUIDE.md`. Lisensi pihak ketiga:
+`THIRD_PARTY_NOTICES.md`.
