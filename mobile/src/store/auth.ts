@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { loginRequest } from '../api/auth';
+import { unregisterPushToken } from '../notifications/push';
 import { setSessionToken } from '../api/session';
 import type { User } from '../types/api';
 
@@ -12,7 +13,7 @@ interface AuthState {
   isHydrated: boolean;
   isSubmitting: boolean;
   login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateUser: (user: User) => void;
   loadFromStorage: () => Promise<void>;
 }
@@ -35,7 +36,10 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      logout() {
+      async logout() {
+        // Remove the device token while the bearer token is still valid, then
+        // clear the session. Push cleanup never blocks logout on failure.
+        await unregisterPushToken();
         set({ token: null, user: null });
       },
 

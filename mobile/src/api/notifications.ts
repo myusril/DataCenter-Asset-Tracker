@@ -54,3 +54,34 @@ export async function deleteReadNotifications(): Promise<number> {
   );
   return response.data.data.deleted;
 }
+
+export type DevicePlatform = 'ANDROID' | 'IOS';
+
+export interface RegisteredDeviceToken {
+  id: number;
+  platform: DevicePlatform;
+  lastSeenAt: string;
+}
+
+export async function registerDeviceToken(input: {
+  token: string;
+  platform: DevicePlatform;
+}): Promise<RegisteredDeviceToken> {
+  const response = await api.post<ApiEnvelope<RegisteredDeviceToken>>(
+    '/api/notifications/device',
+    input,
+  );
+  return response.data.data;
+}
+
+/**
+ * Removes one token, or every token of the caller when `token` is omitted.
+ * The backend never deletes a token owned by another account.
+ */
+export async function unregisterDeviceToken(token?: string): Promise<number> {
+  const response = await api.delete<ApiEnvelope<{ deleted: number }>>(
+    '/api/notifications/device',
+    token === undefined ? undefined : { data: { token } },
+  );
+  return response.data.data.deleted;
+}
