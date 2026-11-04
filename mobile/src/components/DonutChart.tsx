@@ -16,6 +16,8 @@ interface DonutChartProps {
   children?: React.ReactNode;
   accessibilityLabel?: string;
   trackColor?: string;
+  /** Segment end shape. `butt` keeps arcs exact; `round` overlaps neighbours. */
+  lineCap?: 'butt' | 'round';
 }
 
 /**
@@ -32,6 +34,7 @@ export function DonutChart({
   children,
   accessibilityLabel,
   trackColor = chartColors.track,
+  lineCap = 'round',
 }: DonutChartProps) {
   const center = size / 2;
   const radius = (size - thickness) / 2;
@@ -77,7 +80,7 @@ export function DonutChart({
                 stroke={segment.color}
                 strokeDasharray={[dash, circumference - dash]}
                 strokeDashoffset={-offset}
-                strokeLinecap="round"
+                strokeLinecap={lineCap}
                 strokeWidth={thickness}
               />
             );

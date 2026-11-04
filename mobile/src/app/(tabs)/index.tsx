@@ -152,9 +152,10 @@ export default function DashboardScreen() {
                 label: segment.label,
                 value: counts[segment.key as RiskLevel],
               }))}
+              lineCap="butt"
               size={104}
               thickness={11}
-              trackColor="rgba(255,255,255,0.22)"
+              trackColor={predictedTotal > 0 ? 'transparent' : 'rgba(255,255,255,0.22)'}
             >
               <Ionicons color={colors.onPrimary} name="shield-outline" size={22} />
               <Text style={styles.ringLabel}>risiko</Text>
@@ -196,6 +197,65 @@ export default function DashboardScreen() {
                   value={stats.addedThisMonth}
                 />
               </View>
+
+              <ChartCard
+                subtitle="Mesin heuristik deterministik (aturan, statistik, pola) — bukan model yang dilatih."
+                title="Ringkasan Risiko"
+              >
+                <View style={styles.riskScoreRow}>
+                  <Text style={styles.riskScore}>{risk.averageScore.toFixed(2)}</Text>
+                  <View style={styles.riskScoreMeta}>
+                    <Text style={styles.riskScoreLabel}>skor rata-rata</Text>
+                    <Text style={styles.riskScoreLabel}>dari 100</Text>
+                  </View>
+                  <View style={styles.riskCounts}>
+                    {RISK_SEGMENTS.map((segment) => (
+                      <View key={segment.key} style={styles.riskCount}>
+                        <View style={[styles.legendDot, { backgroundColor: segment.color }]} />
+                        <Text style={styles.riskCountValue}>{counts[segment.key as RiskLevel]}</Text>
+                        <Text style={styles.riskCountLabel}>{segment.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+
+                {predictedTotal === 0 ? (
+                  <EmptyState
+                    compact
+                    illustration="prediction"
+                    message="Jalankan prediksi dari tab Risiko untuk melihat sebaran tingkat risiko."
+                    title="Belum ada prediksi aktif"
+                  />
+                ) : null}
+
+                {highRiskAsset ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => router.push(`/asset/${highRiskAsset.assetId}`)}
+                    style={({ pressed }) => [styles.alertCard, pressed ? styles.pressed : null]}
+                  >
+                    <View style={styles.alertIcon}>
+                      <Ionicons color={colors.dangerInk} name="warning" size={18} />
+                    </View>
+                    <View style={styles.alertBody}>
+                      <Text style={styles.alertTitle}>Aset paling berisiko</Text>
+                      <Text numberOfLines={1} style={styles.alertText}>
+                        {highRiskAsset.assetCode} · skor {highRiskAsset.riskScore.toFixed(1)}
+                      </Text>
+                    </View>
+                    <Ionicons color={colors.dangerInk} name="chevron-forward" size={18} />
+                  </Pressable>
+                ) : null}
+
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push('/(tabs)/ai')}
+                  style={({ pressed }) => [styles.linkRow, pressed ? styles.pressed : null]}
+                >
+                  <Text style={styles.linkLabel}>Lihat analisis risiko lengkap</Text>
+                  <Ionicons color={colors.primary} name="arrow-forward" size={16} />
+                </Pressable>
+              </ChartCard>
 
               <ChartCard
                 subtitle="Jumlah aset per status dari server"
@@ -257,65 +317,6 @@ export default function DashboardScreen() {
                     title="Belum ada aset"
                   />
                 )}
-              </ChartCard>
-
-              <ChartCard
-                subtitle="Mesin heuristik deterministik (aturan, statistik, pola) — bukan model yang dilatih."
-                title="Ringkasan Risiko"
-              >
-                <View style={styles.riskScoreRow}>
-                  <Text style={styles.riskScore}>{risk.averageScore.toFixed(2)}</Text>
-                  <View style={styles.riskScoreMeta}>
-                    <Text style={styles.riskScoreLabel}>skor rata-rata</Text>
-                    <Text style={styles.riskScoreLabel}>dari 100</Text>
-                  </View>
-                  <View style={styles.riskCounts}>
-                    {RISK_SEGMENTS.map((segment) => (
-                      <View key={segment.key} style={styles.riskCount}>
-                        <View style={[styles.legendDot, { backgroundColor: segment.color }]} />
-                        <Text style={styles.riskCountValue}>{counts[segment.key as RiskLevel]}</Text>
-                        <Text style={styles.riskCountLabel}>{segment.label}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-
-                {predictedTotal === 0 ? (
-                  <EmptyState
-                    compact
-                    illustration="prediction"
-                    message="Jalankan prediksi dari tab Risiko untuk melihat sebaran tingkat risiko."
-                    title="Belum ada prediksi aktif"
-                  />
-                ) : null}
-
-                {highRiskAsset ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => router.push(`/asset/${highRiskAsset.assetId}`)}
-                    style={({ pressed }) => [styles.alertCard, pressed ? styles.pressed : null]}
-                  >
-                    <View style={styles.alertIcon}>
-                      <Ionicons color={colors.dangerInk} name="warning" size={18} />
-                    </View>
-                    <View style={styles.alertBody}>
-                      <Text style={styles.alertTitle}>Aset paling berisiko</Text>
-                      <Text numberOfLines={1} style={styles.alertText}>
-                        {highRiskAsset.assetCode} · skor {highRiskAsset.riskScore.toFixed(1)}
-                      </Text>
-                    </View>
-                    <Ionicons color={colors.dangerInk} name="chevron-forward" size={18} />
-                  </Pressable>
-                ) : null}
-
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => router.push('/(tabs)/ai')}
-                  style={({ pressed }) => [styles.linkRow, pressed ? styles.pressed : null]}
-                >
-                  <Text style={styles.linkLabel}>Lihat analisis risiko lengkap</Text>
-                  <Ionicons color={colors.primary} name="arrow-forward" size={16} />
-                </Pressable>
               </ChartCard>
 
               <Text style={styles.sectionTitle}>Akses Cepat</Text>
