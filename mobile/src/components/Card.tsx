@@ -2,7 +2,9 @@ import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 
 import { colors } from '../theme/colors';
-import { radius, spacing, typography } from '../theme/spacing';
+import { radius, spacing } from '../theme/spacing';
+import { elevation } from '../theme/tokens';
+import { text } from '../theme/typography';
 
 interface CardProps {
   title?: string;
@@ -23,22 +25,20 @@ export function Card({ title, subtitle, children, style }: CardProps) {
 
 const styles = StyleSheet.create({
   card: {
+    ...elevation.card,
     backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
+    gap: spacing.md,
     padding: spacing.lg,
   },
   title: {
-    color: colors.text,
-    fontSize: typography.heading,
-    fontWeight: '600',
-    marginBottom: spacing.sm,
+    ...text.heading,
   },
   subtitle: {
+    ...text.caption,
     color: colors.muted,
-    fontSize: typography.caption,
-    marginBottom: spacing.md,
-    marginTop: -spacing.xs,
+    marginTop: -spacing.sm,
   },
 });

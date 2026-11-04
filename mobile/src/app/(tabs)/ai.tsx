@@ -2,8 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -11,20 +9,28 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fetchRiskExplanation, fetchRiskSummary, predictAllAssets } from '../../api/ai';
 import { extractErrorMessage } from '../../api/client';
 import { Button } from '../../components/Button';
-import { Card } from '../../components/Card';
+import { ChartCard } from '../../components/ChartCard';
+import { DataList, DataRow } from '../../components/DataList';
 import { EmptyState } from '../../components/EmptyState';
-import { Loading } from '../../components/Loading';
+import { GradientHeader } from '../../components/GradientHeader';
 import { RiskBar } from '../../components/RiskBar';
+import { RiskGauge } from '../../components/RiskGauge';
+import { SegmentedTabs } from '../../components/SegmentedTabs';
+import { Sheet } from '../../components/Sheet';
+import { RiskSkeleton } from '../../components/Skeleton';
 import { StatusPill } from '../../components/StatusPill';
+import { Toast } from '../../components/Toast';
 import { useIsAdmin } from '../../hooks/useIsAdmin';
 import { useNotificationStore } from '../../store/notifications';
 import { colors } from '../../theme/colors';
-import { radius, spacing, typography } from '../../theme/spacing';
+import { radius, spacing } from '../../theme/spacing';
+import { layout } from '../../theme/tokens';
+import { text } from '../../theme/typography';
 import type { RiskExplanation, RiskLevel, RiskSummary } from '../../types/api';
 import { formatDateTime, RISK_LABELS } from '../../utils/format';
 import { RISK_TONES } from '../../utils/pills';
@@ -47,8 +53,32 @@ const FACTOR_LABELS: Record<string, string> = {
   daysSince: 'Jarak maintenance terakhir',
 };
 
-export default function AiScreen() {
+const LAYERS = [
+  {
+    key: 'rules',
+    label: 'Aturan',
+    title: 'Lapisan 1 — aturan',
+    body: 'Skor dasar dihitung dari bobot faktor yang terukur: usia aset, status, frekuensi maintenance, insiden perbaikan, dan kondisi jaringan.',
+  },
+  {
+    key: 'stats',
+    label: 'Statistik',
+    title: 'Lapisan 2 — statistik',
+    body: 'Interval maintenance dibandingkan dengan riwayat aset itu sendiri (deviasi) dan dengan aset sejenis (peer).',
+  },
+  {
+    key: 'pattern',
+    label: 'Pola',
+    title: 'Lapisan 3 — pola',
+    body: 'Kombinasi kejadian seperti jaringan offline berulang dan perbaikan berulang menambah penyesuaian pada skor.',
+  },
+] as const;
+
+type MethodLayer = (typeof LAYERS)[number]['key'];
+
+export default function RiskScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const isAdmin = useIsAdmin();
   const refreshUnread = useNotificationStore((state) => state.refreshUnread);
 
@@ -59,6 +89,8 @@ export default function AiScreen() {
   const [predicting, setPredicting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [explainAssetId, setExplainAssetId] = useState<number | null>(null);
+  const [methodLayer, setMethodLayer] = useState<MethodLayer>('rules');
+  const [methodOpen, setMethodOpen] = useState(false);
 
   const requestId = useRef(0);
 
@@ -111,8 +143,7 @@ export default function AiScreen() {
     setError(null);
     try {
       const result = await predictAllAssets();
-      const failed =
-        result.failed.length > 0 ? ` · ${result.failed.length} gagal` : '';
+      const failed = result.failed.length > 0 ? ` · ${result.failed.length} gagal` : '';
       setToast(
         `Prediksi selesai: ${result.processed} aset diproses · ${result.high} tinggi · ` +
           `${result.medium} sedang · ${result.low} rendah · ${result.alertsCreated} alert baru${failed}.`,
@@ -128,162 +159,241 @@ export default function AiScreen() {
 
   const counts = risk?.counts ?? { LOW: 0, MEDIUM: 0, HIGH: 0 };
   const topAssets = risk?.topRiskAssets ?? [];
+  const activeLayer = LAYERS.find((layer) => layer.key === methodLayer) ?? LAYERS[0];
 
   return (
-    <SafeAreaView edges={['top']} style={styles.safe}>
+    <SafeAreaView edges={[]} style={styles.safe}>
+      <View pointerEvents="none" style={[styles.statusScrim, { height: insets.top }]} />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
-            colors={[colors.accent]}
+            colors={[colors.primary]}
             onRefresh={() => void load(true)}
             refreshing={refreshing}
-            tintColor={colors.accent}
+            tintColor={colors.primary}
           />
         }
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Analisis Risiko</Text>
-          <Text style={styles.subtitle}>
-            Mesin heuristik deterministik (aturan, statistik, dan pola). Bukan model machine learning
-            yang dilatih.
-          </Text>
-        </View>
-
-        {toast ? (
-          <View style={styles.toast}>
-            <Ionicons color={colors.success} name="checkmark-circle" size={18} />
-            <Text style={styles.toastText}>{toast}</Text>
-          </View>
-        ) : null}
-
-        {loading && !risk ? <Loading message="Memuat analisis..." /> : null}
-
-        {error && !risk ? (
-          <Card title="Gagal memuat analisis">
-            <Text style={styles.bodyText}>{error}</Text>
-            <Button label="Coba lagi" onPress={() => void load()} style={styles.retry} />
-          </Card>
-        ) : null}
-
-        {risk ? (
-          <>
-            <Card subtitle={`Prediksi terakhir: ${formatDateTime(risk.lastPredictedAt)}`} title="Ringkasan">
-              <View style={styles.averageRow}>
-                <Text style={styles.average}>{risk.averageScore.toFixed(2)}</Text>
-                <View style={styles.averageMeta}>
-                  <Text style={styles.averageLabel}>skor risiko rata-rata</Text>
-                  <Text style={styles.averageLabel}>dari 100</Text>
-                </View>
-              </View>
-
-              <View style={styles.levelGrid}>
-                {LEVELS.map((level) => (
-                  <View key={level} style={styles.levelCard}>
-                    <StatusPill label={RISK_LABELS[level]} tone={RISK_TONES[level]} />
-                    <Text style={styles.levelCount}>{counts[level]}</Text>
-                    <Text style={styles.levelLabel}>
-                      {level === 'HIGH' ? 'aset tinggi' : level === 'MEDIUM' ? 'aset sedang' : 'aset rendah'}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-
-              <Text style={styles.metaNote}>
-                {risk.assetsWithoutPrediction} aset belum memiliki prediksi.
-              </Text>
-
-              {isAdmin ? (
-                <Button
-                  label="Prediksi semua aset"
-                  loading={predicting}
-                  onPress={handlePredictAll}
-                  style={styles.predictButton}
-                />
-              ) : (
-                <Text style={styles.roleNote}>
-                  Hanya administrator yang dapat menjalankan prediksi ulang.
-                </Text>
-              )}
-            </Card>
-
-            <Text style={styles.sectionTitle}>Aset Berisiko Tertinggi</Text>
-            <Card
-              subtitle={
-                topAssets.length > 0
-                  ? 'Maksimal 5 aset aktif berlevel sedang atau tinggi. Ketuk baris untuk membuka aset, ikon info untuk rincian.'
-                  : undefined
-              }
+        <GradientHeader
+          eyebrow="Mesin heuristik deterministik"
+          right={
+            <Pressable
+              accessibilityLabel="Cara kerja penilaian risiko"
+              accessibilityRole="button"
+              onPress={() => setMethodOpen(true)}
+              style={styles.headerInfo}
             >
-              {topAssets.length === 0 ? (
-                <EmptyState
-                  icon="shield-checkmark-outline"
-                  message="Belum ada aset berisiko sedang atau tinggi pada prediksi aktif."
-                  title="Tidak ada aset berisiko"
-                />
-              ) : (
-                topAssets.map((asset, index) => (
-                  <View key={asset.assetId} style={styles.riskRow}>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => router.push(`/asset/${asset.assetId}`)}
-                      style={({ pressed }) => [styles.riskBody, pressed ? styles.pressed : null]}
-                    >
-                      <View style={styles.riskHeader}>
-                        <Text style={styles.rank}>{index + 1}</Text>
-                        <View style={styles.riskTitle}>
-                          <Text numberOfLines={1} style={styles.riskName}>
-                            {asset.assetName}
+              <Ionicons color={colors.onPrimary} name="help-circle-outline" size={20} />
+            </Pressable>
+          }
+          subtitle="Skor untuk memprioritaskan inspeksi, bukan ramalan model yang dilatih."
+          title="Risiko"
+          variant="compact"
+        />
+
+        <View style={styles.body}>
+          <Toast message={toast} />
+
+          {loading && !risk ? <RiskSkeleton /> : null}
+
+          {error && !risk ? (
+            <ChartCard>
+              <EmptyState
+                action={{ label: 'Coba lagi', onPress: () => void load() }}
+                illustration="error"
+                message={error}
+                title="Gagal memuat analisis"
+              />
+            </ChartCard>
+          ) : null}
+
+          {risk ? (
+            <>
+              <ChartCard
+                subtitle={
+                  risk.lastPredictedAt
+                    ? `Prediksi aktif terakhir ${formatDateTime(risk.lastPredictedAt)}`
+                    : 'Belum ada prediksi tersimpan'
+                }
+                title="Skor Risiko Rata-rata"
+              >
+                <View style={styles.gaugeWrap}>
+                  <RiskGauge score={risk.averageScore} />
+                </View>
+
+                <View style={styles.levelRow}>
+                  {LEVELS.map((level) => (
+                    <View key={level} style={styles.levelCard}>
+                      <StatusPill
+                        label={RISK_LABELS[level]}
+                        style={styles.levelPill}
+                        tone={RISK_TONES[level]}
+                      />
+                      <Text style={styles.levelCount}>{counts[level]}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <Text style={styles.note}>
+                  {risk.assetsWithoutPrediction} aset belum memiliki prediksi.
+                </Text>
+
+                {isAdmin ? (
+                  <Button
+                    icon="pulse-outline"
+                    label="Prediksi semua aset"
+                    loading={predicting}
+                    onPress={handlePredictAll}
+                  />
+                ) : (
+                  <Text style={styles.note}>
+                    Hanya administrator yang dapat menjalankan prediksi ulang.
+                  </Text>
+                )}
+              </ChartCard>
+
+              <ChartCard
+                right={<Text style={styles.cardBadge}>3 lapisan</Text>}
+                title="Cara Kerja"
+              >
+                {LAYERS.map((layer, index) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={layer.key}
+                    onPress={() => {
+                      setMethodLayer(layer.key);
+                      setMethodOpen(true);
+                    }}
+                    style={({ pressed }) => [styles.layerRow, pressed ? styles.pressed : null]}
+                  >
+                    <View style={styles.layerIndex}>
+                      <Text style={styles.layerIndexLabel}>{index + 1}</Text>
+                    </View>
+                    <View style={styles.layerText}>
+                      <Text style={styles.layerTitle}>{layer.label}</Text>
+                      <Text style={styles.layerBody}>{layer.body}</Text>
+                    </View>
+                    <Ionicons color={colors.muted} name="chevron-forward" size={16} />
+                  </Pressable>
+                ))}
+                <Text style={styles.note}>
+                  Input yang sama menghasilkan skor yang sama. Tidak ada akurasi model yang diklaim.
+                </Text>
+              </ChartCard>
+
+              <ChartCard
+                subtitle={
+                  topAssets.length > 0
+                    ? 'Maksimal 5 aset aktif berlevel sedang atau tinggi. Ketuk baris untuk membuka aset.'
+                    : undefined
+                }
+                title="Aset Berisiko Tertinggi"
+              >
+                {topAssets.length === 0 ? (
+                  <EmptyState
+                    compact
+                    illustration="prediction"
+                    message="Belum ada aset berisiko sedang atau tinggi pada prediksi aktif."
+                    title="Tidak ada aset berisiko"
+                  />
+                ) : (
+                  <View style={styles.riskList}>
+                    {topAssets.map((asset, index) => (
+                      <View key={asset.assetId} style={styles.riskRow}>
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() => router.push(`/asset/${asset.assetId}`)}
+                          style={({ pressed }) => [styles.riskBody, pressed ? styles.pressed : null]}
+                        >
+                          <View style={styles.riskHeader}>
+                            <View style={styles.rank}>
+                              <Text style={styles.rankLabel}>{index + 1}</Text>
+                            </View>
+                            <View style={styles.riskTitle}>
+                              <Text numberOfLines={2} style={styles.riskName}>
+                                {asset.assetName}
+                              </Text>
+                              <Text style={styles.riskCode}>{asset.assetCode}</Text>
+                            </View>
+                            <View style={styles.riskScoreBlock}>
+                              <Text style={styles.riskScore}>{asset.riskScore.toFixed(1)}</Text>
+                              <StatusPill
+                                label={RISK_LABELS[asset.riskLevel]}
+                                tone={RISK_TONES[asset.riskLevel]}
+                              />
+                            </View>
+                          </View>
+                          <RiskBar level={asset.riskLevel} score={asset.riskScore} />
+                          <Text style={styles.riskMeta}>
+                            Perkiraan kegagalan: {asset.predictedFailureDays ?? '-'} hari ·{' '}
+                            {formatDateTime(asset.predictedAt)}
                           </Text>
-                          <Text style={styles.riskCode}>{asset.assetCode}</Text>
-                        </View>
-                        <View style={styles.riskScoreBlock}>
-                          <Text style={styles.riskScore}>{asset.riskScore.toFixed(1)}</Text>
-                          <StatusPill
-                            label={RISK_LABELS[asset.riskLevel]}
-                            tone={RISK_TONES[asset.riskLevel]}
-                          />
-                        </View>
+                        </Pressable>
+
+                        <Pressable
+                          accessibilityLabel={`Rincian perhitungan ${asset.assetCode}`}
+                          accessibilityRole="button"
+                          hitSlop={6}
+                          onPress={() => setExplainAssetId(asset.assetId)}
+                          style={styles.infoButton}
+                        >
+                          <Ionicons color={colors.primary} name="information-circle-outline" size={22} />
+                        </Pressable>
                       </View>
-                      <RiskBar level={asset.riskLevel} score={asset.riskScore} />
-                      <Text style={styles.riskMeta}>
-                        Perkiraan kegagalan: {asset.predictedFailureDays ?? '-'} hari ·{' '}
-                        {formatDateTime(asset.predictedAt)}
-                      </Text>
-                    </Pressable>
-
-                    <Pressable
-                      accessibilityLabel={`Rincian perhitungan ${asset.assetCode}`}
-                      accessibilityRole="button"
-                      onPress={() => setExplainAssetId(asset.assetId)}
-                      style={styles.infoButton}
-                    >
-                      <Ionicons color={colors.accent} name="information-circle-outline" size={22} />
-                    </Pressable>
+                    ))}
                   </View>
-                ))
-              )}
-            </Card>
+                )}
+              </ChartCard>
 
-            {error ? (
-              <Text style={styles.inlineError}>Data terakhir gagal diperbarui: {error}</Text>
-            ) : null}
-          </>
-        ) : null}
+              {error ? (
+                <Text style={styles.inlineError}>Data terakhir gagal diperbarui: {error}</Text>
+              ) : null}
+            </>
+          ) : null}
+        </View>
       </ScrollView>
 
-      <ExplainModal assetId={explainAssetId} onClose={() => setExplainAssetId(null)} />
+      <ExplainSheet assetId={explainAssetId} onClose={() => setExplainAssetId(null)} />
+
+      <Sheet
+        onClose={() => setMethodOpen(false)}
+        subtitle="Sama input, sama output — dihitung ulang setiap kali."
+        title="Cara kerja penilaian"
+        visible={methodOpen}
+      >
+        <SegmentedTabs
+          active={methodLayer}
+          items={LAYERS.map((layer) => ({ key: layer.key, label: layer.label }))}
+          onChange={(key) => setMethodLayer(key)}
+        />
+        <View style={styles.methodCard}>
+          <Text style={styles.methodTitle}>{activeLayer.title}</Text>
+          <Text style={styles.methodBody}>{activeLayer.body}</Text>
+        </View>
+        <View style={styles.methodCard}>
+          <Text style={styles.methodTitle}>Yang perlu diketahui</Text>
+          <Text style={styles.methodBody}>
+            Skor 0–100 adalah perkiraan untuk memprioritaskan inspeksi. Mesin ini tidak dilatih
+            dengan data historis dan tidak memiliki angka akurasi; hasilnya berasal dari aturan
+            bobot, statistik riwayat maintenance, dan pola kejadian yang dapat diperiksa ulang.
+          </Text>
+        </View>
+        <View style={styles.methodCard}>
+          <Text style={styles.methodTitle}>Istilah</Text>
+          <Text style={styles.methodBody}>
+            Skor tinggi berarti perlu inspeksi lebih cepat. Perkiraan kegagalan adalah sisa hari
+            sebelum aset diperkirakan bermasalah menurut perhitungan yang sama, bukan ramalan pasti.
+          </Text>
+        </View>
+        <Button label="Mengerti" onPress={() => setMethodOpen(false)} />
+      </Sheet>
     </SafeAreaView>
   );
 }
 
-function ExplainModal({
-  assetId,
-  onClose,
-}: {
-  assetId: number | null;
-  onClose: () => void;
-}) {
+function ExplainSheet({ assetId, onClose }: { assetId: number | null; onClose: () => void }) {
   const isAdmin = useIsAdmin();
   const [explanation, setExplanation] = useState<RiskExplanation | null>(null);
   const [loading, setLoading] = useState(false);
@@ -322,102 +432,98 @@ function ExplainModal({
     };
   }, [assetId]);
 
+  const maxImpact = Math.max(
+    ...(explanation?.topFactors ?? []).map((factor) => Math.abs(factor.impact)),
+    0,
+  );
+
   return (
-    <Modal
-      animationType="fade"
-      onRequestClose={onClose}
-      transparent
+    <Sheet
+      onClose={onClose}
+      subtitle={explanation ? `${explanation.assetCode} · ${explanation.assetName}` : 'Menghitung ulang skor...'}
+      title="Rincian Perhitungan"
       visible={assetId !== null}
     >
-      <View style={styles.overlay}>
-        <View style={styles.modalCard}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Rincian Perhitungan Risiko</Text>
-            <Pressable accessibilityLabel="Tutup" accessibilityRole="button" onPress={onClose}>
-              <Ionicons color={colors.muted} name="close" size={22} />
-            </Pressable>
+      {loading ? (
+        <View style={styles.sheetLoading}>
+          <RiskSkeleton />
+        </View>
+      ) : null}
+
+      {error && !loading ? (
+        <View style={styles.methodCard}>
+          <Text style={styles.methodTitle}>Rincian tidak tersedia</Text>
+          <Text style={styles.methodBody}>{error}</Text>
+        </View>
+      ) : null}
+
+      {explanation && !loading ? (
+        <>
+          <View style={styles.sheetScoreRow}>
+            <Text style={styles.sheetScore}>{explanation.riskScore.toFixed(1)}</Text>
+            <View style={styles.sheetScoreMeta}>
+              <Text style={styles.note}>dari 100</Text>
+              <StatusPill
+                label={RISK_LABELS[explanation.riskLevel]}
+                tone={RISK_TONES[explanation.riskLevel]}
+              />
+            </View>
           </View>
 
-          {loading ? (
-            <View style={styles.modalLoading}>
-              <ActivityIndicator color={colors.accent} />
-              <Text style={styles.modalHint}>Menghitung ulang skor...</Text>
-            </View>
-          ) : null}
+          <Text style={styles.sheetParagraph}>{explanation.explanation}</Text>
 
-          {error && !loading ? (
-            <Text style={styles.bodyText}>{error}</Text>
-          ) : null}
+          <View style={styles.methodCard}>
+            <Text style={styles.methodTitle}>Lapisan perhitungan</Text>
+            <DataList>
+              <DataRow label="1 — skor dasar berbobot" value={explanation.layerBreakdown.layer1.baseScore.toFixed(2)} />
+              <DataRow label="2 — penyesuaian statistik" value={formatAdjustment(explanation.layerBreakdown.layer2.total)} />
+              <DataRow label="3 — pencocokan pola" value={formatAdjustment(explanation.layerBreakdown.layer3.total)} />
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Total</Text>
+                <Text style={styles.totalValue}>{explanation.layerBreakdown.final.toFixed(2)}</Text>
+              </View>
+            </DataList>
+          </View>
 
-          {explanation && !loading ? (
-            <ScrollView contentContainerStyle={styles.modalBody}>
-              <Text style={styles.modalAsset}>
-                {explanation.assetCode} · {explanation.assetName}
-              </Text>
-              <View style={styles.modalScoreRow}>
-                <Text style={styles.modalScore}>{explanation.riskScore.toFixed(1)}</Text>
-                <View style={styles.modalScoreMeta}>
-                  <Text style={styles.modalHint}>dari 100</Text>
-                  <StatusPill
-                    label={RISK_LABELS[explanation.riskLevel]}
-                    tone={RISK_TONES[explanation.riskLevel]}
+          <View style={styles.methodCard}>
+            <Text style={styles.methodTitle}>Faktor utama</Text>
+            {explanation.topFactors.map((factor) => (
+              <View key={factor.name} style={styles.factorRow}>
+                <View style={styles.factorHeader}>
+                  <Text style={styles.factorName}>{FACTOR_LABELS[factor.name] ?? factor.name}</Text>
+                  <Text style={styles.factorImpact}>{formatAdjustment(factor.impact)}</Text>
+                </View>
+                <View style={styles.factorTrack}>
+                  <View
+                    style={[
+                      styles.factorFill,
+                      {
+                        backgroundColor: factor.impact >= 0 ? colors.danger : colors.success,
+                        width: `${
+                          maxImpact > 0 ? Math.max((Math.abs(factor.impact) / maxImpact) * 100, 4) : 0
+                        }%`,
+                      },
+                    ]}
                   />
                 </View>
+                <Text style={styles.factorDescription}>{factor.description}</Text>
               </View>
-              <RiskBar level={explanation.riskLevel} score={explanation.riskScore} thickness={10} />
+            ))}
+          </View>
 
-              <Text style={styles.modalParagraph}>{explanation.explanation}</Text>
+          <View style={styles.methodCard}>
+            <Text style={styles.methodTitle}>Rekomendasi</Text>
+            <Text style={styles.sheetParagraph}>{explanation.recommendation}</Text>
+          </View>
 
-              <Text style={styles.modalSectionTitle}>Lapisan perhitungan</Text>
-              <ModalRow
-                label="1 — skor dasar berbobot"
-                value={explanation.layerBreakdown.layer1.baseScore.toFixed(2)}
-              />
-              <ModalRow
-                label="2 — penyesuaian statistik"
-                value={formatAdjustment(explanation.layerBreakdown.layer2.total)}
-              />
-              <ModalRow
-                label="3 — pencocokan pola"
-                value={formatAdjustment(explanation.layerBreakdown.layer3.total)}
-              />
-              <ModalRow label="Total" value={explanation.layerBreakdown.final.toFixed(2)} />
-
-              <Text style={styles.modalSectionTitle}>Faktor utama</Text>
-              {explanation.topFactors.map((factor) => (
-                <View key={factor.name} style={styles.modalFactor}>
-                  <View style={styles.modalFactorHeader}>
-                    <Text style={styles.modalFactorName}>
-                      {FACTOR_LABELS[factor.name] ?? factor.name}
-                    </Text>
-                    <Text style={styles.modalFactorImpact}>{formatAdjustment(factor.impact)}</Text>
-                  </View>
-                  <Text style={styles.modalHint}>{factor.description}</Text>
-                </View>
-              ))}
-
-              <Text style={styles.modalSectionTitle}>Rekomendasi</Text>
-              <Text style={styles.modalParagraph}>{explanation.recommendation}</Text>
-
-              <Text style={styles.modalNote}>
-                Nilai dihitung ulang saat dialog dibuka dan tidak mengubah prediksi tersimpan. Model:{' '}
-                {explanation.modelVersion}.
-                {isAdmin ? '' : ' Hanya administrator yang dapat menyimpan prediksi baru.'}
-              </Text>
-            </ScrollView>
-          ) : null}
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-function ModalRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.modalRow}>
-      <Text style={styles.modalRowLabel}>{label}</Text>
-      <Text style={styles.modalRowValue}>{value}</Text>
-    </View>
+          <Text style={styles.note}>
+            Nilai dihitung ulang saat panel dibuka dan tidak mengubah prediksi tersimpan. Mesin:{' '}
+            {explanation.modelVersion}.
+            {isAdmin ? '' : ' Hanya administrator yang dapat menyimpan prediksi baru.'}
+          </Text>
+        </>
+      ) : null}
+    </Sheet>
   );
 }
 
@@ -430,113 +536,111 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     flex: 1,
   },
+  statusScrim: {
+    backgroundColor: colors.primary,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    zIndex: 5,
+  },
   content: {
-    gap: spacing.md,
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
+    paddingBottom: layout.tabBarClearance,
   },
-  header: {
-    marginBottom: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  title: {
-    color: colors.text,
-    fontSize: typography.title,
-    fontWeight: '700',
-  },
-  subtitle: {
-    color: colors.muted,
-    fontSize: typography.small,
-    lineHeight: 18,
-    marginTop: spacing.xs,
-  },
-  toast: {
+  headerInfo: {
     alignItems: 'center',
-    backgroundColor: colors.successSoft,
-    borderRadius: radius.sm,
+    borderColor: 'rgba(255,255,255,0.4)',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  body: {
+    gap: layout.sectionGap,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.xl,
+  },
+  cardBadge: {
+    ...text.small,
+    backgroundColor: colors.mutedSurface,
+    borderRadius: radius.pill,
+    color: colors.textSecondary,
+    overflow: 'hidden',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  gaugeWrap: {
+    alignItems: 'center',
+  },
+  levelRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    padding: spacing.md,
-  },
-  toastText: {
-    color: colors.success,
-    flex: 1,
-    fontSize: typography.small,
-    lineHeight: 18,
-  },
-  averageRow: {
-    alignItems: 'flex-end',
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  average: {
-    color: colors.text,
-    fontSize: 40,
-    fontWeight: '700',
-    lineHeight: 44,
-  },
-  averageMeta: {
-    paddingBottom: spacing.sm,
-  },
-  averageLabel: {
-    color: colors.muted,
-    fontSize: typography.small,
-  },
-  levelGrid: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
   },
   levelCard: {
     alignItems: 'center',
-    backgroundColor: colors.background,
-    borderRadius: radius.sm,
+    backgroundColor: colors.mutedSurface,
+    borderRadius: radius.md,
     flex: 1,
-    gap: 2,
+    gap: spacing.xs,
     paddingVertical: spacing.md,
   },
+  levelPill: {
+    alignSelf: 'center',
+  },
   levelCount: {
+    ...text.metric,
+  },
+  note: {
+    ...text.caption,
+    color: colors.muted,
+  },
+  layerRow: {
+    alignItems: 'center',
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    minHeight: 64,
+    paddingVertical: spacing.md,
+  },
+  layerIndex: {
+    alignItems: 'center',
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.sm,
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
+  layerIndexLabel: {
+    ...text.captionStrong,
+    color: colors.primary,
+  },
+  layerText: {
+    flex: 1,
+    gap: 2,
+  },
+  layerTitle: {
+    ...text.captionStrong,
     color: colors.text,
-    fontSize: 22,
-    fontWeight: '700',
-    marginTop: 2,
   },
-  levelLabel: {
+  layerBody: {
+    ...text.caption,
     color: colors.muted,
-    fontSize: typography.small,
   },
-  metaNote: {
-    color: colors.muted,
-    fontSize: typography.small,
-    marginTop: spacing.md,
-  },
-  predictButton: {
-    marginTop: spacing.md,
-  },
-  roleNote: {
-    color: colors.muted,
-    fontSize: typography.small,
-    lineHeight: 18,
-    marginTop: spacing.md,
-  },
-  sectionTitle: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    marginTop: spacing.sm,
-    textTransform: 'uppercase',
+  riskList: {
+    gap: spacing.lg,
   },
   riskRow: {
     alignItems: 'stretch',
     borderTopColor: colors.border,
     borderTopWidth: 1,
     flexDirection: 'row',
+    paddingTop: spacing.md,
   },
   riskBody: {
     flex: 1,
     gap: spacing.xs,
-    paddingVertical: spacing.md,
   },
   riskHeader: {
     alignItems: 'flex-start',
@@ -544,23 +648,28 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   rank: {
-    color: colors.muted,
-    fontSize: typography.small,
-    fontWeight: '700',
-    marginTop: 2,
-    width: 14,
+    alignItems: 'center',
+    backgroundColor: colors.mutedSurface,
+    borderRadius: radius.pill,
+    height: 24,
+    justifyContent: 'center',
+    width: 24,
+  },
+  rankLabel: {
+    ...text.small,
+    color: colors.textSecondary,
   },
   riskTitle: {
     flex: 1,
   },
   riskName: {
-    color: colors.text,
-    fontSize: typography.caption,
-    fontWeight: '600',
+    ...text.captionStrong,
+    fontSize: 13,
+    lineHeight: 18,
   },
   riskCode: {
+    ...text.small,
     color: colors.muted,
-    fontSize: typography.small,
     marginTop: 1,
   },
   riskScoreBlock: {
@@ -568,140 +677,106 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   riskScore: {
-    color: colors.text,
-    fontSize: typography.heading,
-    fontWeight: '700',
+    ...text.heading,
+    fontVariant: ['tabular-nums'],
   },
   riskMeta: {
+    ...text.small,
     color: colors.muted,
-    fontSize: typography.small,
   },
   infoButton: {
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingLeft: spacing.md,
+    minWidth: 44,
+    paddingLeft: spacing.sm,
   },
   pressed: {
     opacity: 0.85,
   },
-  overlay: {
-    backgroundColor: 'rgba(17, 24, 39, 0.45)',
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
+  inlineError: {
+    ...text.caption,
+    color: colors.dangerInk,
   },
-  modalCard: {
-    backgroundColor: colors.surface,
+  methodCard: {
+    backgroundColor: colors.mutedSurface,
     borderRadius: radius.md,
-    maxHeight: '85%',
+    gap: spacing.sm,
     padding: spacing.lg,
   },
-  modalHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  modalTitle: {
+  methodTitle: {
+    ...text.captionStrong,
     color: colors.text,
-    flex: 1,
-    fontSize: typography.heading,
-    fontWeight: '700',
   },
-  modalLoading: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xl,
+  methodBody: {
+    ...text.caption,
+    color: colors.textSecondary,
   },
-  modalBody: {
-    gap: spacing.sm,
-    paddingBottom: spacing.md,
+  sheetLoading: {
+    gap: spacing.lg,
+    paddingTop: spacing.md,
   },
-  modalAsset: {
-    color: colors.muted,
-    fontSize: typography.small,
-  },
-  modalScoreRow: {
+  sheetScoreRow: {
     alignItems: 'flex-end',
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
   },
-  modalScore: {
-    color: colors.text,
-    fontSize: 34,
-    fontWeight: '700',
+  sheetScore: {
+    ...text.metricLarge,
+    fontSize: 36,
+    lineHeight: 42,
   },
-  modalScoreMeta: {
-    gap: 2,
+  sheetScoreMeta: {
+    gap: spacing.xs,
     paddingBottom: spacing.xs,
   },
-  modalHint: {
-    color: colors.muted,
-    fontSize: typography.small,
-    lineHeight: 17,
-  },
-  modalParagraph: {
+  sheetParagraph: {
+    ...text.body,
     color: colors.textSecondary,
-    fontSize: typography.caption,
-    lineHeight: 20,
-    marginTop: spacing.sm,
   },
-  modalSectionTitle: {
-    color: colors.text,
-    fontSize: typography.caption,
-    fontWeight: '700',
-    marginTop: spacing.md,
-  },
-  modalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 3,
-  },
-  modalRowLabel: {
-    color: colors.muted,
-    flex: 1,
-    fontSize: typography.small,
-  },
-  modalRowValue: {
-    color: colors.text,
-    fontSize: typography.small,
-    fontWeight: '600',
-  },
-  modalFactor: {
+  totalRow: {
     borderTopColor: colors.border,
     borderTopWidth: 1,
-    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: spacing.sm,
   },
-  modalFactorHeader: {
+  totalLabel: {
+    ...text.captionStrong,
+    color: colors.text,
+  },
+  totalValue: {
+    ...text.captionStrong,
+    color: colors.primary,
+    fontVariant: ['tabular-nums'],
+  },
+  factorRow: {
+    gap: 4,
+  },
+  factorHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  modalFactorName: {
-    color: colors.text,
+  factorName: {
+    ...text.captionStrong,
     flex: 1,
-    fontSize: typography.small,
-    fontWeight: '600',
   },
-  modalFactorImpact: {
-    color: colors.danger,
-    fontSize: typography.small,
-    fontWeight: '600',
+  factorImpact: {
+    ...text.small,
+    color: colors.dangerInk,
+    fontVariant: ['tabular-nums'],
   },
-  modalNote: {
+  factorTrack: {
+    backgroundColor: colors.border,
+    borderRadius: radius.pill,
+    height: 6,
+    overflow: 'hidden',
+  },
+  factorFill: {
+    borderRadius: radius.pill,
+    height: '100%',
+  },
+  factorDescription: {
+    ...text.small,
     color: colors.muted,
-    fontSize: typography.small,
-    lineHeight: 17,
-    marginTop: spacing.md,
-  },
-  bodyText: {
-    color: colors.textSecondary,
-    fontSize: typography.caption,
-    lineHeight: 20,
-  },
-  retry: {
-    marginTop: spacing.lg,
-  },
-  inlineError: {
-    color: colors.danger,
-    fontSize: typography.small,
   },
 });

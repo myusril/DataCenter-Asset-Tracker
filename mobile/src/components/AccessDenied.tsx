@@ -13,7 +13,7 @@ export function AccessDenied() {
   return (
     <View style={styles.container}>
       <EmptyState
-        icon="lock-closed-outline"
+        illustration="lock"
         message="Halaman ini hanya untuk administrator. Hubungi administrator bila Anda perlu mengubah data."
         title="Akses ditolak"
       />

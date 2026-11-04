@@ -181,7 +181,7 @@ export default function MaintenanceListScreen() {
           keyExtractor={(item) => String(item.id)}
           ListEmptyComponent={
             <EmptyState
-              icon="construct-outline"
+              illustration="maintenance"
               message={
                 typeFilter
                   ? 'Tidak ada catatan dengan jenis perawatan ini.'

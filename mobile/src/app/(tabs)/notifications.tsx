@@ -21,13 +21,17 @@ import {
   markNotificationRead,
 } from '../../api/notifications';
 import { Button } from '../../components/Button';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { EmptyState } from '../../components/EmptyState';
 import { Loading } from '../../components/Loading';
+import { Sheet } from '../../components/Sheet';
 import { useNotificationStore } from '../../store/notifications';
 import { colors } from '../../theme/colors';
 import { radius, spacing, typography } from '../../theme/spacing';
+import { layout } from '../../theme/tokens';
+import { text } from '../../theme/typography';
 import type { AppNotification, NotificationType } from '../../types/api';
-import { formatRelativeTime } from '../../utils/format';
+import { formatNotificationTime } from '../../utils/format';
 
 const TYPE_ICONS: Record<NotificationType, keyof typeof Ionicons.glyphMap> = {
   AI_ALERT: 'warning-outline',
@@ -55,6 +59,8 @@ export default function NotificationsScreen() {
   const [bulkBusy, setBulkBusy] = useState<'read-all' | 'delete-read' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [manageOpen, setManageOpen] = useState(false);
+  const [confirmDeleteRead, setConfirmDeleteRead] = useState(false);
 
   const load = useCallback(
     async (isRefresh = false) => {
@@ -127,9 +133,11 @@ export default function NotificationsScreen() {
     try {
       const updated = await markAllNotificationsRead();
       setNotice(`${updated} notifikasi ditandai sudah dibaca.`);
+      setManageOpen(false);
       await load();
     } catch (caught) {
       setError(extractErrorMessage(caught));
+      setManageOpen(false);
     } finally {
       setBulkBusy(null);
     }
@@ -142,9 +150,11 @@ export default function NotificationsScreen() {
     try {
       const deleted = await deleteReadNotifications();
       setNotice(`${deleted} notifikasi yang sudah dibaca dihapus.`);
+      setConfirmDeleteRead(false);
       await load();
     } catch (caught) {
       setError(extractErrorMessage(caught));
+      setConfirmDeleteRead(false);
     } finally {
       setBulkBusy(null);
     }
@@ -160,52 +170,14 @@ export default function NotificationsScreen() {
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>Notifikasi</Text>
-          <View style={styles.unreadPill}>
-            <Text style={styles.unreadPillText}>{unreadCount} belum dibaca</Text>
-          </View>
-        </View>
-
-        <View style={styles.actions}>
           <Pressable
+            accessibilityLabel="Kelola notifikasi"
             accessibilityRole="button"
-            accessibilityState={{ disabled: unreadCount === 0 || bulkBusy !== null }}
-            disabled={unreadCount === 0 || bulkBusy !== null}
-            onPress={handleMarkAll}
-            style={({ pressed }) => [
-              styles.actionButton,
-              unreadCount === 0 || bulkBusy !== null ? styles.actionDisabled : null,
-              pressed ? styles.pressed : null,
-            ]}
+            hitSlop={4}
+            onPress={() => setManageOpen(true)}
+            style={({ pressed }) => [styles.manageButton, pressed ? styles.pressed : null]}
           >
-            {bulkBusy === 'read-all' ? (
-              <ActivityIndicator color={colors.accent} size="small" />
-            ) : (
-              <>
-                <Ionicons color={colors.accent} name="checkmark-done-outline" size={16} />
-                <Text style={styles.actionLabel}>Tandai semua dibaca</Text>
-              </>
-            )}
-          </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ disabled: readCount === 0 || bulkBusy !== null }}
-            disabled={readCount === 0 || bulkBusy !== null}
-            onPress={handleDeleteRead}
-            style={({ pressed }) => [
-              styles.actionButton,
-              readCount === 0 || bulkBusy !== null ? styles.actionDisabled : null,
-              pressed ? styles.pressed : null,
-            ]}
-          >
-            {bulkBusy === 'delete-read' ? (
-              <ActivityIndicator color={colors.danger} size="small" />
-            ) : (
-              <>
-                <Ionicons color={colors.danger} name="trash-outline" size={16} />
-                <Text style={[styles.actionLabel, styles.actionDanger]}>Hapus yang dibaca</Text>
-              </>
-            )}
+            <Ionicons color={colors.textSecondary} name="ellipsis-horizontal" size={20} />
           </Pressable>
         </View>
 
@@ -231,7 +203,7 @@ export default function NotificationsScreen() {
           keyExtractor={(item) => String(item.id)}
           ListEmptyComponent={
             <EmptyState
-              icon="notifications-outline"
+              illustration="notifications"
               message="Peringatan risiko dan informasi sistem akan tampil di sini."
               title="Belum ada notifikasi"
             />
@@ -260,7 +232,99 @@ export default function NotificationsScreen() {
           <Button label="Coba lagi" onPress={() => void load()} />
         </View>
       ) : null}
+
+      <Sheet
+        onClose={() => setManageOpen(false)}
+        subtitle={`${unreadCount} belum dibaca · ${readCount} sudah dibaca di daftar ini`}
+        title="Kelola notifikasi"
+        visible={manageOpen}
+      >
+        <ManageAction
+          busy={bulkBusy === 'read-all'}
+          description="Semua notifikasi di server ditandai sudah dibaca."
+          disabled={unreadCount === 0 || bulkBusy !== null}
+          icon="checkmark-done-outline"
+          onPress={() => void handleMarkAll()}
+          title="Tandai semua dibaca"
+        />
+        <ManageAction
+          busy={bulkBusy === 'delete-read'}
+          description="Menghapus permanen notifikasi yang sudah dibaca."
+          disabled={readCount === 0 || bulkBusy !== null}
+          icon="trash-outline"
+          onPress={() => {
+            setManageOpen(false);
+            setConfirmDeleteRead(true);
+          }}
+          title="Hapus yang sudah dibaca"
+          tone="danger"
+        />
+        <Button label="Tutup" onPress={() => setManageOpen(false)} variant="secondary" />
+      </Sheet>
+
+      <ConfirmDialog
+        busy={bulkBusy === 'delete-read'}
+        confirmLabel="Hapus"
+        message="Semua notifikasi yang sudah dibaca akan dihapus permanen. Notifikasi yang belum dibaca tidak tersentuh."
+        onCancel={() => {
+          if (bulkBusy === null) {
+            setConfirmDeleteRead(false);
+          }
+        }}
+        onConfirm={() => void handleDeleteRead()}
+        title="Hapus notifikasi terbaca?"
+        visible={confirmDeleteRead}
+      />
     </SafeAreaView>
+  );
+}
+
+function ManageAction({
+  icon,
+  title,
+  description,
+  tone = 'primary',
+  disabled,
+  busy,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  description: string;
+  tone?: 'primary' | 'danger';
+  disabled: boolean;
+  busy: boolean;
+  onPress: () => void;
+}) {
+  const ink = tone === 'danger' ? colors.dangerInk : colors.primary;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ busy, disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.manageAction,
+        disabled ? styles.manageActionDisabled : null,
+        pressed ? styles.pressed : null,
+      ]}
+    >
+      <View style={[styles.manageIcon, tone === 'danger' ? styles.manageIconDanger : null]}>
+        {busy ? (
+          <ActivityIndicator color={ink} size="small" />
+        ) : (
+          <Ionicons color={ink} name={icon} size={20} />
+        )}
+      </View>
+      <View style={styles.manageText}>
+        <Text style={[styles.manageTitle, tone === 'danger' ? styles.manageTitleDanger : null]}>
+          {title}
+        </Text>
+        <Text style={styles.manageDescription}>{description}</Text>
+      </View>
+      <Ionicons color={colors.muted} name="chevron-forward" size={16} />
+    </Pressable>
   );
 }
 
@@ -295,7 +359,7 @@ function NotificationRow({
         <View style={styles.rowContent}>
           <View style={styles.rowTop}>
             <Text style={styles.typeLabel}>{TYPE_LABELS[notification.type]}</Text>
-            <Text style={styles.time}>{formatRelativeTime(notification.createdAt)}</Text>
+            <Text style={styles.time}>{formatNotificationTime(notification.createdAt)}</Text>
           </View>
           <Text numberOfLines={2} style={[styles.rowTitle, unread ? styles.rowTitleUnread : null]}>
             {notification.title}
@@ -349,42 +413,57 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+  manageButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
   title: {
     color: colors.text,
     fontSize: typography.title,
     fontWeight: '700',
   },
-  unreadPill: {
-    backgroundColor: colors.dangerSoft,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 3,
-  },
-  unreadPillText: {
-    color: colors.danger,
-    fontSize: typography.small,
-    fontWeight: '600',
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: spacing.lg,
-    paddingVertical: spacing.xs,
-  },
-  actionButton: {
+  manageAction: {
     alignItems: 'center',
+    backgroundColor: colors.mutedSurface,
+    borderRadius: radius.md,
     flexDirection: 'row',
-    gap: 4,
+    gap: spacing.md,
+    minHeight: 76,
+    padding: spacing.md,
   },
-  actionDisabled: {
-    opacity: 0.45,
+  manageActionDisabled: {
+    opacity: 0.5,
   },
-  actionLabel: {
-    color: colors.accent,
-    fontSize: typography.small,
-    fontWeight: '600',
+  manageIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.sm,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
   },
-  actionDanger: {
-    color: colors.danger,
+  manageIconDanger: {
+    backgroundColor: colors.dangerSoft,
+  },
+  manageText: {
+    flex: 1,
+    gap: 2,
+  },
+  manageTitle: {
+    ...text.bodyStrong,
+  },
+  manageTitleDanger: {
+    color: colors.dangerInk,
+  },
+  manageDescription: {
+    ...text.small,
+    color: colors.muted,
   },
   notice: {
     backgroundColor: colors.successSoft,
@@ -392,7 +471,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   noticeText: {
-    color: colors.success,
+    color: colors.successInk,
     fontSize: typography.small,
     lineHeight: 17,
   },
@@ -402,12 +481,13 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   errorText: {
-    color: colors.danger,
+    color: colors.dangerInk,
     fontSize: typography.small,
     lineHeight: 17,
   },
   listContent: {
     padding: spacing.lg,
+    paddingBottom: layout.tabBarClearance,
   },
   row: {
     backgroundColor: colors.surface,

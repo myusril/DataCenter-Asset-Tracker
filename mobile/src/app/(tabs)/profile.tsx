@@ -5,10 +5,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { StatusPill } from '../../components/StatusPill';
 import { useAuthStore } from '../../store/auth';
 import { colors } from '../../theme/colors';
 import { radius, spacing, typography } from '../../theme/spacing';
+import { layout } from '../../theme/tokens';
 import { formatDateTime, initialsOf, ROLE_LABELS } from '../../utils/format';
 
 export default function ProfileScreen() {
@@ -35,15 +37,13 @@ export default function ProfileScreen() {
           <Text style={styles.username}>@{user.username}</Text>
           <StatusPill
             label={ROLE_LABELS[user.role]}
+            style={styles.rolePill}
             tone={user.role === 'ADMIN' ? 'accent' : 'neutral'}
           />
         </View>
 
         <Card title="Informasi akun">
-          <Row label="Nama lengkap" value={user.fullName} />
-          <Row label="Username" value={user.username} />
           <Row label="Email" value={user.email} />
-          <Row label="Role" value={ROLE_LABELS[user.role]} />
           <Row label="Login terakhir" value={formatDateTime(user.lastLogin)} />
         </Card>
 
@@ -52,31 +52,20 @@ export default function ProfileScreen() {
           <Row label="Model risiko" value="Heuristik v1.0" />
         </Card>
 
-        {confirming ? (
-          <Card title="Keluar dari akun?">
-            <Text style={styles.confirmText}>
-              Sesi Anda akan dihapus dari perangkat ini. Anda perlu masuk kembali untuk membuka
-              aplikasi.
-            </Text>
-            <View style={styles.confirmActions}>
-              <Button
-                label="Batal"
-                onPress={() => setConfirming(false)}
-                style={styles.confirmButton}
-                variant="secondary"
-              />
-              <Button
-                label="Keluar"
-                onPress={logout}
-                style={styles.confirmButton}
-                variant="danger"
-              />
-            </View>
-          </Card>
-        ) : (
-          <Button label="Keluar" onPress={() => setConfirming(true)} variant="danger" />
-        )}
+        <Button label="Keluar" onPress={() => setConfirming(true)} variant="danger" />
       </ScrollView>
+
+      <ConfirmDialog
+        confirmLabel="Keluar"
+        message="Sesi Anda akan dihapus dari perangkat ini. Anda perlu masuk kembali untuk membuka aplikasi."
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => {
+          setConfirming(false);
+          logout();
+        }}
+        title="Keluar dari akun?"
+        visible={confirming}
+      />
     </SafeAreaView>
   );
 }
@@ -98,7 +87,7 @@ const styles = StyleSheet.create({
   content: {
     gap: spacing.lg,
     padding: spacing.lg,
-    paddingBottom: spacing.xxl,
+    paddingBottom: layout.tabBarClearance,
   },
   title: {
     color: colors.text,
@@ -110,6 +99,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     paddingVertical: spacing.md,
+  },
+  rolePill: {
+    alignSelf: 'center',
   },
   avatar: {
     alignItems: 'center',
@@ -150,18 +142,5 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     maxWidth: '65%',
     textAlign: 'right',
-  },
-  confirmText: {
-    color: colors.textSecondary,
-    fontSize: typography.caption,
-    lineHeight: 20,
-  },
-  confirmActions: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.lg,
-  },
-  confirmButton: {
-    flex: 1,
   },
 });
