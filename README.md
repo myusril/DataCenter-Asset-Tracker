@@ -288,6 +288,7 @@ berlevel **Tinggi** membuat notifikasi `AI_ALERT` untuk setiap user aktif. Conto
     ├── FIREBASE_SETUP.md     # setup push FCM dari nol, kredensial sebagai placeholder
     ├── HANDOFF.md            # status & cara melanjutkan
     ├── MODULES.md            # panduan modul per modul, mesin risiko, model data, alur mobile
+    ├── USER_GUIDE.md         # panduan pemakaian layar dan skenario demo 10 menit
     └── scripts/smoke.sh      # smoke test alur API
 ```
 
@@ -556,4 +557,4 @@ dengan `--no-ff` agar setiap fase terlihat di riwayat, ditambah satu brief pengu
 
 Detail status terakhir dan cara melanjutkan: `docs/HANDOFF.md`. Kontrak API:
 `docs/API_CONTRACT.md`. Penjelasan modul per modul, rumus risiko, model data, dan alur mobile:
-`docs/MODULES.md`.
+`docs/MODULES.md`. Cara memakai layar dan skenario demo: `docs/USER_GUIDE.md`.
