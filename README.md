@@ -278,7 +278,7 @@ bagian dokumen ke hasil yang benar-benar ada di repository.
 | §6 AI hybrid engine | 3 lapisan, contoh 83.5 HIGH | 3 lapisan seperti dijelaskan di atas; contoh SRV-001 direproduksi (69.5 + 5 + 9) |
 | §8.1 Test flow | Health, login, create asset, maintenance, predict, notifications | Dijalankan; hasil di tabel "Hasil pengujian" |
 | §8.2 Checklist | 9 baris fitur | Diisi dengan bukti pengamatan nyata (lihat tabel berikut) |
-| §11.2 TODO Production | Unit test Jest minimal 70% coverage | 12 suite / 116 test; statements 89.98%, lines 89.96%, functions 93.93%, branches 73.80% (threshold ditegakkan di `jest.config.mjs`) |
+| §11.2 TODO Production | Unit test Jest minimal 70% coverage | 13 suite / 133 test; statements 89.80%, lines 89.77%, functions 93.59%, branches 74.26% (threshold ditegakkan di `jest.config.mjs`) |
 | §12.1 Sprint 1–4 mobile | Foundation → auth → dashboard/aset → operasional/AI | 4 fase mobile selesai (dashboard, aset, detail 4 tab, maintenance, jaringan, AI, notifikasi, form admin, profil) |
 | Fase 1 Asset management (roadmap) | List, search, filter, detail, navigasi | Selesai |
 | Fase 2 Operational features | Maintenance list/detail, network screen | Selesai |
