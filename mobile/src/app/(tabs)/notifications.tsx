@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,15 +22,18 @@ import {
   markNotificationRead,
 } from '../../api/notifications';
 import { Button } from '../../components/Button';
+import { ChartCard } from '../../components/ChartCard';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { EmptyState } from '../../components/EmptyState';
-import { Loading } from '../../components/Loading';
+import { GradientHeader } from '../../components/GradientHeader';
+import { IconButton } from '../../components/IconButton';
 import { Sheet } from '../../components/Sheet';
+import { NotificationListSkeleton } from '../../components/Skeleton';
 import { useNotificationStore } from '../../store/notifications';
 import { colors } from '../../theme/colors';
-import { radius, spacing, typography } from '../../theme/spacing';
-import { layout } from '../../theme/tokens';
-import { text } from '../../theme/typography';
+import { radius, spacing } from '../../theme/spacing';
+import { elevation, layout } from '../../theme/tokens';
+import { fontFamily, text } from '../../theme/typography';
 import type { AppNotification, NotificationType } from '../../types/api';
 import { formatNotificationTime } from '../../utils/format';
 
@@ -184,36 +188,66 @@ export default function NotificationsScreen() {
   const readCount = items.filter((item) => item.isRead).length;
 
   return (
-    <SafeAreaView edges={['top']} style={styles.safe}>
-      <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <Text style={styles.title}>Notifikasi</Text>
-          <Pressable
+    <SafeAreaView edges={[]} style={styles.safe}>
+      <StatusBar style="light" />
+      <GradientHeader
+        right={
+          <IconButton
             accessibilityLabel="Kelola notifikasi"
-            accessibilityRole="button"
-            hitSlop={4}
+            icon="ellipsis-horizontal"
             onPress={() => setManageOpen(true)}
-            style={({ pressed }) => [styles.manageButton, pressed ? styles.pressed : null]}
-          >
-            <Ionicons color={colors.textSecondary} name="ellipsis-horizontal" size={20} />
-          </Pressable>
+            tone="glass"
+          />
+        }
+        subtitle="Peringatan risiko, pengingat maintenance, dan informasi sistem."
+        title="Notifikasi"
+      >
+        <View style={styles.heroRow}>
+          <View style={styles.heroStat}>
+            <Text style={styles.heroValue}>{unreadCount}</Text>
+            <Text style={styles.heroLabel}>Belum dibaca</Text>
+          </View>
+          <View style={styles.heroDivider} />
+          <View style={styles.heroStat}>
+            <Text style={styles.heroValue}>{readCount}</Text>
+            <Text style={styles.heroLabel}>Sudah dibaca</Text>
+          </View>
         </View>
+      </GradientHeader>
 
-        {notice ? (
-          <View style={styles.notice}>
-            <Text style={styles.noticeText}>{notice}</Text>
-          </View>
-        ) : null}
-        {error ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
-      </View>
+      {notice ? (
+        <View accessibilityLiveRegion="polite" style={styles.notice}>
+          <Ionicons color={colors.successInk} name="checkmark-circle" size={16} />
+          <Text style={styles.noticeText}>{notice}</Text>
+        </View>
+      ) : null}
+      {error ? (
+        <View accessibilityRole="alert" style={styles.errorBox}>
+          <Ionicons color={colors.dangerInk} name="alert-circle" size={16} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : null}
 
-      {loading && items.length === 0 ? <Loading message="Memuat notifikasi..." /> : null}
+      {loading && items.length === 0 ? (
+        <View style={styles.skeletonWrap}>
+          <NotificationListSkeleton />
+        </View>
+      ) : null}
 
-      {!loading || items.length > 0 ? (
+      {error && items.length === 0 && !loading ? (
+        <View style={styles.stateWrap}>
+          <ChartCard>
+            <EmptyState
+              action={{ label: 'Coba lagi', onPress: () => void load() }}
+              illustration="error"
+              message={error}
+              title="Gagal memuat notifikasi"
+            />
+          </ChartCard>
+        </View>
+      ) : null}
+
+      {!(error && items.length === 0) && (!loading || items.length > 0) ? (
         <FlatList
           contentContainerStyle={styles.listContent}
           data={sortedItems}
@@ -226,12 +260,24 @@ export default function NotificationsScreen() {
               title="Belum ada notifikasi"
             />
           }
+          ListHeaderComponent={
+            items.length > 0 ? (
+              <View style={styles.captionRow}>
+                <View style={styles.captionPill}>
+                  <Ionicons color={colors.textSecondary} name="time-outline" size={13} />
+                  <Text style={styles.listCaption}>
+                    Menampilkan {items.length} notifikasi terbaru
+                  </Text>
+                </View>
+              </View>
+            ) : undefined
+          }
           refreshControl={
             <RefreshControl
-              colors={[colors.accent]}
+              colors={[colors.primary]}
               onRefresh={() => void load(true)}
               refreshing={refreshing}
-              tintColor={colors.accent}
+              tintColor={colors.primary}
             />
           }
           renderItem={({ item }) => (
@@ -242,13 +288,8 @@ export default function NotificationsScreen() {
               onPress={() => void handleTap(item)}
             />
           )}
+          showsVerticalScrollIndicator={false}
         />
-      ) : null}
-
-      {error && items.length === 0 && !loading ? (
-        <View style={styles.stateBox}>
-          <Button label="Coba lagi" onPress={() => void load()} />
-        </View>
       ) : null}
 
       <Sheet
@@ -362,29 +403,20 @@ function NotificationRow({
 
   return (
     <View style={[styles.row, unread ? styles.rowUnread : null]}>
+      {unread ? <View pointerEvents="none" style={styles.unreadRail} /> : null}
       <Pressable
         accessibilityRole="button"
         onPress={onPress}
         style={({ pressed }) => [styles.rowBody, pressed ? styles.pressed : null]}
       >
-        <View
-          style={[
-            styles.iconBox,
-            unread ? [styles.iconBoxUnread, { backgroundColor: tone.soft }] : null,
-          ]}
-        >
-          <Ionicons
-            color={unread ? tone.ink : colors.muted}
-            name={TYPE_ICONS[notification.type]}
-            size={18}
-          />
+        <View style={[styles.iconBox, { backgroundColor: tone.soft }]}>
+          <Ionicons color={tone.ink} name={TYPE_ICONS[notification.type]} size={18} />
         </View>
 
         <View style={styles.rowContent}>
-          <View style={styles.rowTop}>
-            <Text style={styles.typeLabel}>{TYPE_LABELS[notification.type]}</Text>
-            <Text style={styles.time}>{formatNotificationTime(notification.createdAt)}</Text>
-          </View>
+          <Text numberOfLines={1} style={[styles.typeLabel, { color: tone.ink }]}>
+            {TYPE_LABELS[notification.type]}
+          </Text>
           <Text numberOfLines={2} style={[styles.rowTitle, unread ? styles.rowTitleUnread : null]}>
             {notification.title}
           </Text>
@@ -392,10 +424,16 @@ function NotificationRow({
             {notification.message}
           </Text>
           {notification.asset ? (
-            <Text style={styles.assetLink}>
-              {notification.asset.assetCode} · {notification.asset.assetName}
-            </Text>
+            <View style={styles.assetChip}>
+              <Ionicons color={colors.primary} name="cube-outline" size={12} />
+              <Text numberOfLines={1} style={styles.assetLink}>
+                {notification.asset.assetCode} · {notification.asset.assetName}
+              </Text>
+            </View>
           ) : null}
+          <Text numberOfLines={1} style={styles.time}>
+            {formatNotificationTime(notification.createdAt)}
+          </Text>
         </View>
       </Pressable>
 
@@ -403,16 +441,14 @@ function NotificationRow({
         {busy ? (
           <ActivityIndicator color={colors.muted} size="small" />
         ) : (
-          <Pressable
+          <IconButton
             accessibilityLabel="Hapus notifikasi"
-            accessibilityRole="button"
+            icon="trash-outline"
             onPress={onDelete}
-            style={styles.deleteButton}
-          >
-            <Ionicons color={colors.muted} name="trash-outline" size={16} />
-          </Pressable>
+            size="sm"
+            tone="soft"
+          />
         )}
-        {unread ? <View style={styles.unreadDot} /> : null}
       </View>
     </View>
   );
@@ -427,35 +463,90 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     flex: 1,
   },
-  header: {
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-  },
-  headerRow: {
+  heroRow: {
     alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderRadius: radius.lg,
+    borderWidth: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    padding: spacing.lg,
   },
-  manageButton: {
+  heroStat: {
+    flex: 1,
+    gap: 2,
+  },
+  heroDivider: {
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    height: 36,
+    width: 1,
+  },
+  heroValue: {
+    ...text.metricLarge,
+    color: colors.onPrimary,
+    textAlign: 'center',
+  },
+  heroLabel: {
+    ...text.small,
+    color: colors.onPrimaryMuted,
+    textAlign: 'center',
+  },
+  captionRow: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  captionPill: {
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radius.pill,
     borderWidth: 1,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
+    flexDirection: 'row',
+    gap: 5,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 5,
   },
-  title: {
-    color: colors.text,
-    fontSize: typography.title,
-    fontWeight: '700',
+  listCaption: {
+    ...text.small,
+    color: colors.textSecondary,
+  },
+  notice: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.successSoft,
+    borderRadius: radius.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginHorizontal: layout.screenPadding,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+  },
+  noticeText: {
+    ...text.caption,
+    color: colors.successInk,
+    flex: 1,
+  },
+  errorBox: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.dangerSoft,
+    borderRadius: radius.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginHorizontal: layout.screenPadding,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+  },
+  errorText: {
+    ...text.caption,
+    color: colors.dangerInk,
+    flex: 1,
   },
   manageAction: {
+    ...elevation.card,
     alignItems: 'center',
-    backgroundColor: colors.mutedSurface,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: radius.md,
+    borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.md,
     minHeight: 76,
@@ -489,40 +580,37 @@ const styles = StyleSheet.create({
     ...text.small,
     color: colors.muted,
   },
-  notice: {
-    backgroundColor: colors.successSoft,
-    borderRadius: radius.sm,
-    padding: spacing.sm,
+  skeletonWrap: {
+    paddingTop: spacing.lg,
   },
-  noticeText: {
-    color: colors.successInk,
-    fontSize: typography.small,
-    lineHeight: 17,
-  },
-  errorBox: {
-    backgroundColor: colors.dangerSoft,
-    borderRadius: radius.sm,
-    padding: spacing.sm,
-  },
-  errorText: {
-    color: colors.dangerInk,
-    fontSize: typography.small,
-    lineHeight: 17,
+  stateWrap: {
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.lg,
   },
   listContent: {
-    padding: spacing.lg,
     paddingBottom: layout.tabBarClearance,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.lg,
   },
   row: {
+    ...elevation.card,
     backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     flexDirection: 'row',
+    overflow: 'hidden',
   },
   rowUnread: {
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accent,
+    borderColor: colors.primary,
+  },
+  unreadRail: {
+    backgroundColor: colors.primary,
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    top: 0,
+    width: 3,
   },
   rowBody: {
     flex: 1,
@@ -535,74 +623,63 @@ const styles = StyleSheet.create({
   },
   iconBox: {
     alignItems: 'center',
-    backgroundColor: colors.background,
     borderRadius: radius.pill,
-    height: 34,
+    height: 36,
     justifyContent: 'center',
-    width: 34,
-  },
-  iconBoxUnread: {
-    backgroundColor: colors.surface,
-  },
-  rowTop: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    width: 36,
   },
   typeLabel: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
+    ...text.small,
+    fontFamily: fontFamily.bold,
   },
   time: {
-    color: colors.muted,
-    fontSize: 11,
+    ...text.small,
+    marginTop: spacing.xs,
   },
   rowTitle: {
+    ...text.captionStrong,
     color: colors.textSecondary,
-    fontSize: typography.caption,
     marginTop: 2,
   },
   rowTitleUnread: {
     color: colors.text,
-    fontWeight: '700',
+    fontFamily: fontFamily.bold,
   },
   rowMessage: {
+    ...text.small,
     color: colors.textSecondary,
-    fontSize: typography.small,
-    lineHeight: 18,
+    lineHeight: 17,
     marginTop: 2,
   },
+  assetChip: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    gap: 4,
+    marginBottom: spacing.xs,
+    marginTop: spacing.sm,
+    maxWidth: '100%',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
   assetLink: {
-    color: colors.accent,
-    fontSize: typography.small,
-    fontWeight: '600',
-    marginTop: spacing.xs,
+    ...text.small,
+    color: colors.primary,
+    flexShrink: 1,
+    fontFamily: fontFamily.semibold,
   },
   rowSide: {
     alignItems: 'center',
-    gap: spacing.xs,
+    justifyContent: 'flex-start',
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.md,
-  },
-  deleteButton: {
-    padding: spacing.xs,
-  },
-  unreadDot: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.pill,
-    height: 8,
-    width: 8,
-  },
-  pressed: {
-    opacity: 0.85,
   },
   separator: {
     height: spacing.md,
   },
-  stateBox: {
-    padding: spacing.lg,
+  pressed: {
+    opacity: 0.85,
   },
 });

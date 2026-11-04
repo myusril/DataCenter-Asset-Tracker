@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,16 +17,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { extractErrorMessage } from '../api/client';
 import { checkNetworkConnection, fetchNetworkList } from '../api/network';
-import { Button } from '../components/Button';
-import { Card } from '../components/Card';
+import { ChartCard } from '../components/ChartCard';
 import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
-import { Loading } from '../components/Loading';
-import { ScreenHeader } from '../components/ScreenHeader';
+import { GradientHeader } from '../components/GradientHeader';
+import { IconButton } from '../components/IconButton';
+import { ListSkeleton } from '../components/Skeleton';
 import { StatusPill } from '../components/StatusPill';
 import { useIsAdmin } from '../hooks/useIsAdmin';
 import { colors } from '../theme/colors';
-import { radius, spacing, typography } from '../theme/spacing';
+import { radius, spacing } from '../theme/spacing';
+import { elevation, layout } from '../theme/tokens';
+import { text } from '../theme/typography';
 import type {
   ConnectionStatus,
   NetworkRecord,
@@ -157,64 +160,104 @@ export default function NetworkListScreen() {
     void loadPage(pagination.page + 1, 'append');
   }
 
+  const reachedEnd = Boolean(pagination && pagination.page >= pagination.totalPages);
+
   return (
-    <SafeAreaView edges={['top']} style={styles.safe}>
-      <ScreenHeader onBack={() => router.back()} title="Jaringan" />
+    <SafeAreaView edges={[]} style={styles.safe}>
+      <StatusBar style="light" />
+      <GradientHeader
+        eyebrow="Pemantauan data center"
+        left={
+          <IconButton
+            accessibilityLabel="Kembali"
+            icon="arrow-back"
+            onPress={() => router.back()}
+            tone="glass"
+          />
+        }
+        subtitle="Status koneksi terkini setiap perangkat."
+        title="Jaringan"
+        variant="compact"
+      >
+        <View style={styles.heroCard}>
+          <View style={styles.heroText}>
+            <Text style={styles.heroLabel}>Total perangkat</Text>
+            <Text style={styles.heroValue}>{pagination ? pagination.total : '—'}</Text>
+          </View>
+          <View style={styles.heroBadge}>
+            <Ionicons color={colors.onPrimary} name="funnel-outline" size={15} />
+            <Text style={styles.heroBadgeLabel}>
+              {statusFilter ? CONNECTION_LABELS[statusFilter] : 'Semua status'}
+            </Text>
+          </View>
+        </View>
+      </GradientHeader>
 
       <View style={styles.filters}>
         <View style={styles.searchBox}>
           <Ionicons color={colors.muted} name="search-outline" size={18} />
           <TextInput
+            accessibilityLabel="Cari perangkat jaringan"
             autoCapitalize="none"
             autoCorrect={false}
             onChangeText={setSearch}
             placeholder="Cari hostname atau alamat IP"
-            placeholderTextColor={colors.muted}
+            placeholderTextColor={colors.placeholder}
             style={styles.searchInput}
             value={search}
           />
           {search ? (
-            <Pressable accessibilityRole="button" onPress={() => setSearch('')}>
+            <Pressable
+              accessibilityLabel="Hapus pencarian"
+              accessibilityRole="button"
+              hitSlop={13}
+              onPress={() => setSearch('')}
+            >
               <Ionicons color={colors.muted} name="close-circle" size={18} />
             </Pressable>
           ) : null}
         </View>
 
-        <View style={styles.filterHeader}>
-          <Text style={styles.filterLabel}>Status koneksi</Text>
-          <Text style={styles.count}>
-            {pagination ? `${pagination.total} perangkat` : 'Memuat...'}
-          </Text>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.chipRow}>
-            {STATUS_OPTIONS.map((option) => (
-              <Chip
-                active={statusFilter === option.value}
-                key={option.label}
-                label={option.label}
-                onPress={() => setStatusFilter(option.value)}
-              />
-            ))}
-          </View>
+        <Text style={styles.filterLabel}>Status koneksi</Text>
+        <ScrollView
+          contentContainerStyle={styles.chipRow}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+        >
+          {STATUS_OPTIONS.map((option) => (
+            <Chip
+              active={statusFilter === option.value}
+              key={option.label}
+              label={option.label}
+              onPress={() => setStatusFilter(option.value)}
+            />
+          ))}
         </ScrollView>
       </View>
 
       {checkNotice ? (
-        <View style={styles.notice}>
-          <Ionicons color={colors.success} name="wifi" size={16} />
+        <View accessibilityLiveRegion="polite" style={styles.notice}>
+          <Ionicons color={colors.successInk} name="wifi" size={16} />
           <Text style={styles.noticeText}>{checkNotice}</Text>
         </View>
       ) : null}
 
-      {loading && items.length === 0 ? <Loading message="Memuat data jaringan..." /> : null}
+      {loading && items.length === 0 ? (
+        <View style={styles.skeletonWrap}>
+          <ListSkeleton rows={4} />
+        </View>
+      ) : null}
 
       {error && items.length === 0 && !loading ? (
-        <View style={styles.stateBox}>
-          <Card title="Gagal memuat data jaringan">
-            <Text style={styles.bodyText}>{error}</Text>
-            <Button label="Coba lagi" onPress={() => void loadPage(1, 'initial')} style={styles.retry} />
-          </Card>
+        <View style={styles.stateWrap}>
+          <ChartCard>
+            <EmptyState
+              action={{ label: 'Coba lagi', onPress: () => void loadPage(1, 'initial') }}
+              illustration="error"
+              message={error}
+              title="Gagal memuat data jaringan"
+            />
+          </ChartCard>
         </View>
       ) : null}
 
@@ -233,7 +276,14 @@ export default function NetworkListScreen() {
             />
           }
           ListFooterComponent={
-            loadingMore ? <ActivityIndicator color={colors.accent} style={styles.footer} /> : undefined
+            loadingMore ? (
+              <View style={styles.footer}>
+                <ActivityIndicator color={colors.primary} size="small" />
+                <Text style={styles.footerText}>Memuat perangkat berikutnya...</Text>
+              </View>
+            ) : items.length > 0 && reachedEnd ? (
+              <Text style={styles.footerEnd}>Semua perangkat sudah ditampilkan</Text>
+            ) : undefined
           }
           ListHeaderComponent={
             error ? <Text style={styles.inlineError}>{error}</Text> : undefined
@@ -242,10 +292,10 @@ export default function NetworkListScreen() {
           onEndReachedThreshold={0.4}
           refreshControl={
             <RefreshControl
-              colors={[colors.accent]}
+              colors={[colors.primary]}
               onRefresh={() => void loadPage(1, 'refresh')}
               refreshing={refreshing}
-              tintColor={colors.accent}
+              tintColor={colors.primary}
             />
           }
           renderItem={({ item }) => (
@@ -257,6 +307,7 @@ export default function NetworkListScreen() {
               record={item}
             />
           )}
+          showsVerticalScrollIndicator={false}
         />
       ) : null}
     </SafeAreaView>
@@ -288,7 +339,12 @@ function NetworkRow({
             <Text numberOfLines={1} style={styles.assetName}>
               {record.asset.assetName}
             </Text>
-            <Text style={styles.assetCode}>{record.asset.assetCode}</Text>
+            <View style={styles.codeRow}>
+              <Ionicons color={colors.muted} name="barcode-outline" size={13} />
+              <Text numberOfLines={1} style={styles.assetCode}>
+                {record.asset.assetCode}
+              </Text>
+            </View>
           </View>
           <StatusPill
             label={CONNECTION_LABELS[record.connectionStatus]}
@@ -297,20 +353,26 @@ function NetworkRow({
         </View>
 
         <View style={styles.addresses}>
-          <Ionicons color={colors.muted} name="desktop-outline" size={14} />
-          <Text style={styles.addressText}>{record.hostname ?? 'Tanpa hostname'}</Text>
+          <Ionicons color={colors.textSecondary} name="desktop-outline" size={14} />
+          <Text numberOfLines={1} style={styles.addressText}>
+            {record.hostname ?? 'Tanpa hostname'}
+          </Text>
           <Text style={styles.addressDot}>·</Text>
-          <Text style={styles.addressText}>{record.ipAddress ?? 'Tanpa IP'}</Text>
+          <Text numberOfLines={1} style={styles.addressText}>
+            {record.ipAddress ?? 'Tanpa IP'}
+          </Text>
         </View>
 
-        <Text style={styles.checked}>
-          Terakhir dicek: {formatDateTime(record.lastChecked)}
-        </Text>
+        <View style={styles.checkedRow}>
+          <Ionicons color={colors.muted} name="time-outline" size={12} />
+          <Text style={styles.checked}>Terakhir dicek: {formatDateTime(record.lastChecked)}</Text>
+        </View>
       </Pressable>
 
       {isAdmin ? (
         <View style={styles.rowActions}>
           <Pressable
+            accessibilityLabel={`Cek koneksi ${record.asset.assetCode}`}
             accessibilityRole="button"
             accessibilityState={{ busy: checking, disabled: checking }}
             disabled={checking}
@@ -322,10 +384,10 @@ function NetworkRow({
             ]}
           >
             {checking ? (
-              <ActivityIndicator color={colors.accent} size="small" />
+              <ActivityIndicator color={colors.primary} size="small" />
             ) : (
               <>
-                <Ionicons color={colors.accent} name="pulse-outline" size={16} />
+                <Ionicons color={colors.primary} name="pulse-outline" size={16} />
                 <Text style={styles.checkLabel}>Cek</Text>
               </>
             )}
@@ -345,71 +407,106 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     flex: 1,
   },
+  heroCard: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between',
+    padding: spacing.lg,
+  },
+  heroText: {
+    flex: 1,
+    gap: 2,
+  },
+  heroLabel: {
+    ...text.captionStrong,
+    color: colors.onPrimaryMuted,
+  },
+  heroValue: {
+    ...text.metricHero,
+  },
+  heroBadge: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderColor: 'rgba(255,255,255,0.24)',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    maxWidth: '52%',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  heroBadgeLabel: {
+    ...text.captionStrong,
+    color: colors.onPrimary,
+    flexShrink: 1,
+  },
   filters: {
     gap: spacing.sm,
-    paddingBottom: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.xl,
   },
   searchBox: {
+    ...elevation.card,
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.sm,
-    height: 44,
+    minHeight: 50,
     paddingHorizontal: spacing.md,
   },
   searchInput: {
+    ...text.body,
     color: colors.text,
     flex: 1,
-    fontSize: typography.caption,
-    paddingVertical: 0,
-  },
-  filterHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing.xs,
+    paddingVertical: spacing.md,
   },
   filterLabel: {
-    color: colors.muted,
-    fontSize: typography.small,
-    fontWeight: '600',
-  },
-  count: {
-    color: colors.muted,
-    fontSize: typography.small,
+    ...text.label,
+    marginTop: spacing.xs,
   },
   chipRow: {
     flexDirection: 'row',
     gap: spacing.sm,
+    paddingRight: layout.screenPadding,
   },
   notice: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: colors.successSoft,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     flexDirection: 'row',
     gap: spacing.sm,
+    marginHorizontal: layout.screenPadding,
     marginBottom: spacing.sm,
-    marginHorizontal: spacing.lg,
     padding: spacing.md,
   },
   noticeText: {
-    color: colors.success,
+    ...text.caption,
+    color: colors.successInk,
     flex: 1,
-    fontSize: typography.small,
-    lineHeight: 18,
+  },
+  skeletonWrap: {
+    paddingTop: spacing.md,
   },
   listContent: {
-    padding: spacing.lg,
-    paddingTop: spacing.xs,
+    paddingBottom: spacing.xxl,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.sm,
   },
   row: {
+    ...elevation.card,
     backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     flexDirection: 'row',
     overflow: 'hidden',
@@ -427,16 +524,20 @@ const styles = StyleSheet.create({
   },
   rowTitleBlock: {
     flex: 1,
+    gap: 3,
   },
   assetName: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: '600',
+    ...text.heading,
+  },
+  codeRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
   },
   assetCode: {
+    ...text.small,
     color: colors.muted,
-    fontSize: typography.small,
-    marginTop: 2,
+    flexShrink: 1,
   },
   addresses: {
     alignItems: 'center',
@@ -445,17 +546,23 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   addressText: {
+    ...text.caption,
     color: colors.textSecondary,
-    fontSize: typography.small,
+    flexShrink: 1,
   },
   addressDot: {
-    color: colors.muted,
-    fontSize: typography.small,
+    ...text.caption,
+    color: colors.border,
+  },
+  checkedRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 2,
   },
   checked: {
+    ...text.small,
     color: colors.muted,
-    fontSize: typography.small,
-    marginTop: 2,
   },
   rowActions: {
     borderLeftColor: colors.border,
@@ -465,41 +572,49 @@ const styles = StyleSheet.create({
   },
   checkButton: {
     alignItems: 'center',
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.pill,
     flexDirection: 'row',
     gap: 4,
-    paddingVertical: spacing.sm,
+    minHeight: 38,
+    paddingHorizontal: spacing.md,
   },
   checking: {
     opacity: 0.7,
   },
   checkLabel: {
-    color: colors.accent,
-    fontSize: typography.small,
-    fontWeight: '700',
-  },
-  pressed: {
-    opacity: 0.85,
+    ...text.captionStrong,
+    color: colors.primary,
   },
   separator: {
     height: spacing.md,
   },
   footer: {
-    marginVertical: spacing.lg,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'center',
+    paddingVertical: spacing.lg,
   },
-  stateBox: {
-    padding: spacing.lg,
+  footerText: {
+    ...text.caption,
+    color: colors.muted,
   },
-  bodyText: {
-    color: colors.textSecondary,
-    fontSize: typography.caption,
-    lineHeight: 20,
+  footerEnd: {
+    ...text.small,
+    paddingVertical: spacing.lg,
+    textAlign: 'center',
   },
-  retry: {
-    marginTop: spacing.lg,
+  stateWrap: {
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.md,
   },
   inlineError: {
-    color: colors.danger,
-    fontSize: typography.small,
+    ...text.caption,
+    color: colors.dangerInk,
     marginBottom: spacing.md,
+  },
+  pressed: {
+    opacity: 0.85,
   },
 });

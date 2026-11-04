@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,7 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { createAsset, describeAssetError, type AssetWritePayload } from '../../api/assets';
 import { AccessDenied } from '../../components/AccessDenied';
 import { AssetForm } from '../../components/AssetForm';
-import { ScreenHeader } from '../../components/ScreenHeader';
+import { GradientHeader } from '../../components/GradientHeader';
+import { IconButton } from '../../components/IconButton';
 import { useIsAdmin } from '../../hooks/useIsAdmin';
 import { colors } from '../../theme/colors';
 
@@ -19,8 +21,22 @@ export default function NewAssetScreen() {
 
   if (!isAdmin) {
     return (
-      <SafeAreaView edges={['top']} style={styles.safe}>
-        <ScreenHeader onBack={() => router.back()} title="Tambah Aset" />
+      <SafeAreaView edges={[]} style={styles.safe}>
+        <StatusBar style="light" />
+        <GradientHeader
+          eyebrow="Inventaris"
+          left={
+            <IconButton
+              accessibilityLabel="Kembali"
+              icon="arrow-back"
+              onPress={() => router.back()}
+              tone="glass"
+            />
+          }
+          subtitle="Formulir ini hanya untuk administrator."
+          title="Tambah Aset"
+          variant="compact"
+        />
         <AccessDenied />
       </SafeAreaView>
     );
@@ -43,8 +59,22 @@ export default function NewAssetScreen() {
   }
 
   return (
-    <SafeAreaView edges={['top']} style={styles.safe}>
-      <ScreenHeader onBack={() => router.back()} title="Tambah Aset" />
+    <SafeAreaView edges={[]} style={styles.safe}>
+      <StatusBar style="light" />
+      <GradientHeader
+        eyebrow="Inventaris"
+        left={
+          <IconButton
+            accessibilityLabel="Kembali"
+            icon="arrow-back"
+            onPress={() => router.back()}
+            tone="glass"
+          />
+        }
+        subtitle="Lengkapi identitas, lokasi, dan data jaringan aset."
+        title="Tambah Aset"
+        variant="compact"
+      />
       <AssetForm
         error={error}
         onSubmit={(payload) => void handleSubmit(payload)}

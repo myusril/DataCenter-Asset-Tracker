@@ -122,6 +122,87 @@ export function AssetListSkeleton() {
   );
 }
 
+/** Maintenance and network lists: pill + text lines per card. */
+export function ListSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <View accessibilityLabel="Memuat daftar" accessibilityRole="progressbar" style={styles.stack}>
+      {Array.from({ length: rows }, (_, key) => (
+        <SkeletonCard key={key}>
+          <View style={styles.rowBetween}>
+            <Skeleton height={22} radius={radius.pill} width={92} />
+            <Skeleton height={11} width={64} />
+          </View>
+          <Skeleton height={14} width="64%" />
+          <Skeleton height={11} width="44%" />
+          <Skeleton height={36} radius={radius.sm} />
+        </SkeletonCard>
+      ))}
+    </View>
+  );
+}
+
+/** Notification list: tone icon beside a title and two body lines. */
+export function NotificationListSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <View accessibilityLabel="Memuat notifikasi" accessibilityRole="progressbar" style={styles.stack}>
+      {Array.from({ length: rows }, (_, key) => (
+        <SkeletonCard key={key}>
+          <View style={styles.row}>
+            <Skeleton height={38} radius={radius.pill} width={38} />
+            <View style={styles.legend}>
+              <Skeleton height={11} width="38%" />
+              <Skeleton height={14} width="82%" />
+              <Skeleton height={11} width="68%" />
+            </View>
+          </View>
+        </SkeletonCard>
+      ))}
+    </View>
+  );
+}
+
+/** Maintenance detail: hero, link row, grouped facts. */
+export function RecordDetailSkeleton() {
+  return (
+    <View accessibilityLabel="Memuat catatan" accessibilityRole="progressbar" style={styles.stack}>
+      <Skeleton height={168} radius={radius.xl} />
+      <Skeleton height={52} radius={radius.md} />
+      <SkeletonCard>
+        {[0, 1, 2, 3, 4].map((key) => (
+          <View key={key} style={styles.rowBetween}>
+            <Skeleton height={12} width="34%" />
+            <Skeleton height={12} width="44%" />
+          </View>
+        ))}
+      </SkeletonCard>
+      <SkeletonCard>
+        <Skeleton height={14} width="28%" />
+        <Skeleton height={56} radius={radius.sm} />
+      </SkeletonCard>
+    </View>
+  );
+}
+
+/** Form screens: grouped field cards plus the submit bar. */
+export function FormSkeleton() {
+  return (
+    <View accessibilityLabel="Memuat formulir" accessibilityRole="progressbar" style={styles.stack}>
+      {[0, 1, 2].map((key) => (
+        <SkeletonCard key={key}>
+          <Skeleton height={14} width="32%" />
+          {[0, 1].map((field) => (
+            <View key={field} style={styles.field}>
+              <Skeleton height={10} width="26%" />
+              <Skeleton height={48} radius={radius.sm} />
+            </View>
+          ))}
+        </SkeletonCard>
+      ))}
+      <Skeleton height={52} radius={radius.md} />
+    </View>
+  );
+}
+
 /** Detail: hero, tab strip, grouped rows. */
 export function AssetDetailSkeleton() {
   return (
@@ -196,6 +277,9 @@ const styles = StyleSheet.create({
   legend: {
     flex: 1,
     gap: spacing.md,
+  },
+  field: {
+    gap: spacing.sm,
   },
   rowBetween: {
     alignItems: 'center',

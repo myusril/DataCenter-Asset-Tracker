@@ -1,7 +1,9 @@
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '../theme/colors';
-import { radius, spacing, typography } from '../theme/spacing';
+import { radius, spacing } from '../theme/spacing';
+import { elevation } from '../theme/tokens';
+import { text } from '../theme/typography';
 
 interface ConfirmDialogProps {
   visible: boolean;
@@ -28,7 +30,7 @@ export function ConfirmDialog({
   return (
     <Modal animationType="fade" onRequestClose={onCancel} transparent visible={visible}>
       <View style={styles.overlay}>
-        <View style={styles.card}>
+        <View accessibilityRole="alert" style={styles.card}>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
 
@@ -57,7 +59,7 @@ export function ConfirmDialog({
               ]}
             >
               {busy ? (
-                <ActivityIndicator color={colors.surface} size="small" />
+                <ActivityIndicator color={colors.onPrimary} size="small" />
               ) : (
                 <Text style={styles.confirmLabel}>{confirmLabel}</Text>
               )}
@@ -71,58 +73,49 @@ export function ConfirmDialog({
 
 const styles = StyleSheet.create({
   overlay: {
-    backgroundColor: 'rgba(17, 24, 39, 0.45)',
+    backgroundColor: colors.overlay,
     flex: 1,
     justifyContent: 'center',
     padding: spacing.xxl,
   },
   card: {
+    ...elevation.floating,
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.xl,
+    borderRadius: radius.xl,
+    padding: spacing.xxl,
   },
   title: {
-    color: colors.text,
-    fontSize: typography.heading,
-    fontWeight: '700',
+    ...text.title,
   },
   message: {
-    color: colors.textSecondary,
-    fontSize: typography.caption,
-    lineHeight: 20,
+    ...text.body,
     marginTop: spacing.sm,
   },
   actions: {
     flexDirection: 'row',
     gap: spacing.md,
-    marginTop: spacing.xl,
+    marginTop: spacing.xxl,
   },
   button: {
     alignItems: 'center',
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     flex: 1,
-    height: 44,
     justifyContent: 'center',
+    minHeight: 48,
   },
   cancelButton: {
-    backgroundColor: colors.background,
-    borderColor: colors.border,
-    borderWidth: 1,
+    backgroundColor: colors.mutedSurface,
   },
   confirmButton: {
     backgroundColor: colors.danger,
   },
   cancelLabel: {
-    color: colors.text,
-    fontSize: typography.caption,
-    fontWeight: '600',
+    ...text.bodyStrong,
   },
   confirmLabel: {
-    color: colors.surface,
-    fontSize: typography.caption,
-    fontWeight: '700',
+    ...text.button,
   },
   pressed: {
-    opacity: 0.8,
+    opacity: 0.85,
   },
 });
