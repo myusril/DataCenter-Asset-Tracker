@@ -152,9 +152,10 @@ export default function DashboardScreen() {
                 label: segment.label,
                 value: counts[segment.key as RiskLevel],
               }))}
+              lineCap="butt"
               size={104}
               thickness={11}
-              trackColor="rgba(255,255,255,0.22)"
+              trackColor={predictedTotal > 0 ? 'transparent' : 'rgba(255,255,255,0.22)'}
             >
               <Ionicons color={colors.onPrimary} name="shield-outline" size={22} />
               <Text style={styles.ringLabel}>risiko</Text>
