@@ -287,6 +287,7 @@ berlevel **Tinggi** membuat notifikasi `AI_ALERT` untuk setiap user aktif. Conto
     ├── API_CONTRACT.md       # kontrak 42 endpoint (37 dokumen + 5 ekstensi)
     ├── FIREBASE_SETUP.md     # setup push FCM dari nol, kredensial sebagai placeholder
     ├── HANDOFF.md            # status & cara melanjutkan
+    ├── MODULES.md            # panduan modul per modul, mesin risiko, model data, alur mobile
     └── scripts/smoke.sh      # smoke test alur API
 ```
 
@@ -553,4 +554,6 @@ dengan `--no-ff` agar setiap fase terlihat di riwayat, ditambah satu brief pengu
 | 4 | Layar operasional (maintenance, jaringan, AI, notifikasi), form admin, refactor require cycle, dokumentasi | `feat/mobile-ops-docs` | `feat: add maintenance, network, and ai screens`, `feat: add notification center and admin forms`, `refactor: remove auth store require cycle`, `docs: update readme and handoff for delivered scope` |
 | 5 | Penguatan pengujian backend: integration suite 37 endpoint, database test terpisah, threshold coverage, dokumentasi | `test/backend-coverage` | `test: add api integration suites`, `test: enforce coverage threshold`, `docs: document test coverage` |
 
-Detail status terakhir dan cara melanjutkan: `docs/HANDOFF.md`. Kontrak API: `docs/API_CONTRACT.md`.
+Detail status terakhir dan cara melanjutkan: `docs/HANDOFF.md`. Kontrak API:
+`docs/API_CONTRACT.md`. Penjelasan modul per modul, rumus risiko, model data, dan alur mobile:
+`docs/MODULES.md`.
