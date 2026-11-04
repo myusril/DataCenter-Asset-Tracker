@@ -5,14 +5,21 @@ Dokumen ini mencatat status pekerjaan terakhir agar sesi berikutnya bisa melanju
 ## Status
 
 Brief 11 (push notification lewat FCM langsung) selesai pada branch `feat/push-notifications`
-(4 commit). Backend mendapat tabel `device_tokens` (migrasi `20261104120000_add_device_tokens`),
-2 endpoint pendaftaran perangkat, dan provider `push.provider.ts` berbasis `firebase-admin`; mobile
-mendaftarkan token FCM setelah login, memperbaruinya saat token berputar, menghapusnya saat logout,
-dan membuka layar tujuan saat notifikasi diketuk. Total endpoint kini **42** = 37 dari dokumen +
-5 ekstensi (2 jadwal/pengingat maintenance, profil sendiri, 2 perangkat push). Push nonaktif secara
-default (`PUSH_ENABLED=false`) dan menjadi no-op bila service account belum ada; baris notifikasi
-in-app tetap sumber kebenaran. Branch belum di-merge ke `main`; mahasiswa yang melakukan merge dan
-men-deploy backend.
+(4 commit) dan **sudah di-merge ke `main`**. Backend mendapat tabel `device_tokens` (migrasi
+`20261104120000_add_device_tokens`), 2 endpoint pendaftaran perangkat, dan provider
+`push.provider.ts` berbasis `firebase-admin`; mobile mendaftarkan token FCM setelah login,
+memperbaruinya saat token berputar, menghapusnya saat logout, dan membuka layar tujuan saat
+notifikasi diketuk. Total endpoint kini **42** = 37 dari dokumen + 5 ekstensi (2 jadwal/pengingat
+maintenance, profil sendiri, 2 perangkat push). Push nonaktif secara default (`PUSH_ENABLED=false`)
+dan menjadi no-op bila service account belum tersedia; baris notifikasi in-app tetap sumber
+kebenaran.
+
+Pengiriman push sudah diverifikasi pada **4 November 2026** di **Infinix X6882** (Hot 50 4G,
+Android 14) dengan APK release: pesan uji dari Firebase Console sampai, `AI_ALERT` dan
+`MAINTENANCE_REMINDER` dari jalur otomatis juga sampai, dan ketukan membuka layar yang benar.
+Pemilik berikutnya tetap perlu menyiapkan proyek Firebase sendiri, meletakkan service account di
+server dengan izin baca untuk akun proses backend, dan membangun ulang APK dengan
+`google-services.json` miliknya. Panduan lengkap: `docs/FIREBASE_SETUP.md`.
 
 Brief 9 (jadwal maintenance + pengingat otomatis) sudah di `main`: 2 endpoint ekstensi dan job harian,
 layar `/schedule`, kartu dashboard, dan pemetaan notifikasi `MAINTENANCE_REMINDER`.
@@ -125,6 +132,7 @@ EXPO_PUBLIC_API_URL=http://localhost:3000 npx expo start --web               # w
 
 # Push (opsional): letakkan google-services.json di mobile/ lalu build ulang.
 # Di server, set PUSH_ENABLED=true dan FIREBASE_SERVICE_ACCOUNT=/path/service-account.json.
+# File harus dapat dibaca akun proses backend, mis. root:<grup> 640; detail di docs/FIREBASE_SETUP.md.
 ```
 
 Database test diturunkan dari `DATABASE_URL` di `backend/.env` dengan nama database diganti menjadi
@@ -135,7 +143,8 @@ sesudah). `prisma migrate deploy` dipakai untuk database test, bukan `migrate re
 Environment variable (nama saja): `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `PORT`,
 `NODE_ENV`, `CORS_ORIGIN`, `SEED_ADMIN_PASSWORD`, `SEED_TECH_PASSWORD`, `REMINDER_JOB_ENABLED`
 (default `false`), `PUSH_ENABLED` (default `false`), `FIREBASE_SERVICE_ACCOUNT` (path JSON service
-account di server, mode `600`), dan `EXPO_PUBLIC_API_URL` untuk mobile. Nilai asli hanya ada di `backend/.env`
+account di server, harus dapat dibaca akun proses backend — mis. `root:<grup> 640`, bukan `600 root`),
+dan `EXPO_PUBLIC_API_URL` untuk mobile. Nilai asli hanya ada di `backend/.env`
 (tidak di-commit).
 
 ## Kondisi data demo saat handoff
@@ -165,13 +174,13 @@ Selama pengujian manual brief 4, data demo ikut berubah (ini normal, bukan bug):
   2 user, 9 aset, 14 maintenance, dan 79 prediksi (angka prediksi sudah 79 sebelum brief berjalan,
   hasil sesi sebelumnya; catatan "70" pada handoff brief 9 sudah usang).
 - Brief 11 menambah migrasi `20261104120000_add_device_tokens` (tabel baru; baris lama tidak
-  berubah) dan hanya menguji di database test serta backend lokal. Push end-to-end **belum** dapat
-  diverifikasi karena tidak ada service account Firebase di mesin ini: `PUSH_ENABLED=false` dan
-  provider no-op. Pada Infinix X6882 (Android 14), login menampilkan prompt izin satu kali; setelah
+  berubah). Pada Infinix X6882 (Android 14), login menampilkan prompt izin satu kali; setelah
   diizinkan, `device_tokens` berisi 1 baris (token tidak pernah dicetak), membuka ulang aplikasi
   tidak menambah baris, dan logout menghapusnya kembali menjadi 0. Login tersebut memperbarui
-  `lastLogin` akun `admin`; tidak ada baris notifikasi yang diubah. Pengiriman FCM dari Firebase
-  Console menunggu service account di server dan APK yang dibangun dengan `google-services.json`.
+  `lastLogin` akun `admin`; tidak ada baris notifikasi yang diubah. Dengan service account di server
+  dan `PUSH_ENABLED=true`, pesan uji dari Firebase Console, `AI_ALERT`, dan `MAINTENANCE_REMINDER`
+  terkirim ke perangkat; ketukan membuka detail aset atau detail maintenance. Prosedur dan
+  pemecahan masalah ada di `docs/FIREBASE_SETUP.md`.
 
 Untuk mengembalikan data demo ke kondisi seed (lokal, destruktif):
 

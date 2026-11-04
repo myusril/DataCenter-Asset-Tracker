@@ -264,7 +264,7 @@ Verifikasi UI utama pada emulator **Medium_Phone_API_36.1** (Android 16 / API 36
 | Auto-login | emulator | Aplikasi dibuka ulang langsung ke Dashboard |
 | Dashboard | emulator, web | Total **9**, Aktif **6**, Maintenance **2**, Nonaktif **1**; risiko **7 / 1 / 1**; skor rata-rata **25.26** (data awal); kartu "1 Aset Berisiko Tinggi — SRV-001 · 83.5" membuka `/asset/10` |
 | Daftar aset | emulator, web | 9 aset; pencarian "srv" → 3 hasil; filter status Maintenance → 1; pagination 6 + 3 tanpa duplikat |
-| Detail aset (4 tab) | emulator, web | SRV-001 Maintenance, Dell / PowerEdge R750 / SN-DC-SRV-001; Jaringan `web-srv-01` / `192.168.1.10` / Offline; AI 83.5 Tinggi, confidence 95, 15 hari |
+| Detail aset (4 tab) | emulator, web | SRV-001 Maintenance, Dell / PowerEdge R750 / SN-DC-SRV-001; Jaringan `web-srv-01` dengan IP contoh seed; AI 83.5 Tinggi, confidence 95, 15 hari |
 | Maintenance list | emulator, web | 12 catatan; filter Rutin → 3; Perbaikan → 6 (setelah 2 catatan baru) |
 | Maintenance detail | emulator, web | Tanggal, teknisi, biaya, jadwal berikutnya, uraian, hasil; keterangan aturan `Resolved` |
 | Jaringan | emulator | 8 perangkat; **Cek** pada SRV-001 mengubah Offline → Online, "Terakhir dicek" 31 Okt 2026 12:31, ringkasan hijau muncul |
@@ -315,7 +315,13 @@ lalu dipasang pada **Infinix X6882** (Android 14) dengan `adb reverse tcp:3000 t
 
 Catatan: APK uji lokal memakai manifest generate yang ditambahi `usesCleartextTraffic="true"` agar
 bisa mencapai backend HTTP `localhost`; `android/` di-ignore dan perubahan itu tidak di-commit.
-Pengiriman FCM end-to-end belum diuji karena belum ada service account Firebase.
+
+Pengiriman push sudah diverifikasi pada 4 November 2026 dengan service account di backend: pesan uji
+dari Firebase Console, `AI_ALERT` hasil prediksi HIGH, dan `MAINTENANCE_REMINDER` sampai ke perangkat
+**Infinix X6882**; ketukan membuka detail aset atau detail maintenance. Yang masih harus dilakukan
+pemilik berikutnya adalah memakai proyek Firebase sendiri (`mobile/google-services.json`), meletakkan
+service account di server agar dapat dibaca proses backend, menyalakan `PUSH_ENABLED`, lalu membangun
+ulang APK. Langkah lengkap: `../docs/FIREBASE_SETUP.md`.
 
 ### Batasan
 
