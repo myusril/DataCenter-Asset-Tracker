@@ -4,9 +4,10 @@ Aplikasi inventaris dan asset tracking data center untuk teknisi dan administrat
 (server, switch, router, storage, firewall, rack), riwayat lokasi, informasi jaringan, riwayat
 maintenance, serta prediksi risiko untuk preventive maintenance.
 
-- Backend: REST API **Express 5 + TypeScript + Prisma 6.19.3 + PostgreSQL 16**, 37 endpoint, 7 tabel.
+- Backend: REST API **Express 5 + TypeScript + Prisma 6.19.3 + PostgreSQL 16**, 39 endpoint
+  (37 dari dokumen + 2 ekstensi jadwal/pengingat maintenance), 7 tabel.
 - Mobile: aplikasi **Expo SDK 58 / React Native 0.88** (Expo Router, Zustand, axios) untuk Android
-  (emulator) dan web.
+  (HP fisik) dan web.
 - Mesin risiko: **heuristik deterministik 3 lapisan** (aturan berbobot + statistik + pencocokan pola),
   bukan model machine learning yang dilatih, tanpa layanan AI eksternal.
 
@@ -38,7 +39,9 @@ lengkap ada di bagian [Riwayat pengembangan](#riwayat-pengembangan).
 - Asset: CRUD, pencarian, filter tipe/status/rack, pengurutan, pagination, statistik, riwayat lokasi
   (1:N) dan informasi jaringan (1:1).
 - Maintenance: CRUD, filter, statistik, sinkronisasi status aset (Perbaikan/Upgrade/Penggantian →
-  Maintenance; hasil diawali `Resolved` → Aktif).
+  Maintenance; hasil diawali `Resolved` → Aktif), jadwal maintenance (terlewat lebih dulu, `daysUntil`,
+  `state`) dan pengingat `MAINTENANCE_REMINDER` idempoten untuk seluruh user aktif dengan job harian
+  07.00 yang diaktifkan `REMINDER_JOB_ENABLED`.
 - Network: upsert per aset, update, hapus, simulasi cek koneksi (80% Online / 20% Offline), statistik.
 - AI: prediksi tunggal/batch, riwayat prediksi berversi (`isActive`), explain tanpa menyimpan, ringkasan
   risiko dashboard, alert otomatis untuk prediksi HIGH.
@@ -56,12 +59,17 @@ lengkap ada di bagian [Riwayat pengembangan](#riwayat-pengembangan).
 - Detail aset: tab **Umum / Jaringan / Maintenance / AI**; catatan maintenance dapat diketuk untuk
   membuka detailnya.
 - Maintenance: daftar seluruh riwayat + filter jenis + pagination, halaman detail lengkap.
+- Jadwal maintenance: layar `/schedule` dengan tab **Terlewat / 7 hari / 30 hari** beserta jumlahnya,
+  baris terlewat lebih dulu, kartu jadwal + jumlah terlewat di dashboard, dan tombol
+  **Jalankan pengingat** khusus admin.
 - Jaringan: daftar perangkat dengan status koneksi, pencarian hostname/IP, filter status, dan aksi
   **Cek** (khusus admin) yang memperbarui status + waktu cek.
 - AI: skor rata-rata, jumlah per level, maksimal 5 aset berisiko tertinggi dengan bar skor, dialog
   rincian perhitungan dari `GET /api/ai/explain/:assetId`, tombol **Prediksi semua aset** (admin).
 - Notifikasi: badge belum dibaca pada tab, urutan belum dibaca lebih dulu, tandai dibaca saat diketuk,
-  tandai semua dibaca, hapus satu, hapus yang sudah dibaca, waktu relatif, ketuk alert → detail aset.
+  tandai semua dibaca, hapus satu, hapus yang sudah dibaca, waktu relatif, ketuk alert AI → detail
+  aset, dan ketuk pengingat maintenance → detail maintenance (atau tab Maintenance aset bila catatan
+  sudah dihapus).
 - Admin: form tambah/ubah aset (Umum + Lokasi + Jaringan, validasi inline), hapus aset dengan dialog
   konfirmasi dan pesan konflik 409 yang terbaca, form catat maintenance dengan pemilih aset.
 - Teknisi: seluruh kontrol tulis disembunyikan; rute admin yang dibuka langsung menampilkan
@@ -72,7 +80,7 @@ lengkap ada di bagian [Riwayat pengembangan](#riwayat-pengembangan).
 ```
 ┌──────────────────────────┐        HTTP/JSON        ┌───────────────────────────┐
 │  Mobile (Expo SDK 58)    │  Authorization: Bearer  │  Backend (Express 5, TS)  │
-│  Expo Router + Zustand   │ ──────────────────────> │  37 endpoint REST         │
+│  Expo Router + Zustand   │ ──────────────────────> │  39 endpoint REST         │
 │  axios + AsyncStorage    │ <────────────────────── │  JWT + bcrypt + Zod       │
 └──────────────────────────┘                         └─────────────┬─────────────┘
                                                                    │ Prisma 6.19.3
@@ -100,7 +108,7 @@ Alur data utama:
 | Node.js | **24.21.0** | Dokumen sumber menulis Node 22; mesin pengembangan tidak memiliki Node 22 |
 | npm | 11.x (bawaan Node 24) | |
 | PostgreSQL | **16** | Instance lokal berjalan pada port **5433**, bukan 5432 seperti dokumen |
-| Android SDK | emulator `Medium_Phone_API_36.1` (Android 16 / API 36) + Expo Go 58 | Verifikasi UI utama |
+| Android SDK | HP fisik **Infinix X6882 (Hot 50 4G)**, Android 14 + Expo Go 58 | Verifikasi UI utama |
 | Browser | Chrome/Chromium | Verifikasi sekunder `expo start --web` |
 
 ## Setup database
@@ -144,6 +152,7 @@ npm run dev
 | `CORS_ORIGIN` | Opsional. Daftar origin dipisah koma; kosong = pantulkan origin request (hanya untuk lokal) |
 | `SEED_ADMIN_PASSWORD` | Password akun admin saat seed; hanya dipakai `npm run prisma:seed` |
 | `SEED_TECH_PASSWORD` | Password akun teknisi saat seed |
+| `REMINDER_JOB_ENABLED` | `true` menyalakan job pengingat harian 07.00; default `false` |
 
 Output yang diharapkan:
 
@@ -159,8 +168,8 @@ Output yang diharapkan:
 cd mobile
 npm install
 cp .env.example .env
-EXPO_PUBLIC_API_URL=http://10.0.2.2:3000 npx expo start --android   # emulator Android
-EXPO_PUBLIC_API_URL=http://localhost:3000 npx expo start --web      # browser (pemeriksaan sekunder)
+EXPO_PUBLIC_API_URL=http://<IP-LAN-komputer>:3000 npx expo start --android   # HP fisik di jaringan yang sama
+EXPO_PUBLIC_API_URL=http://localhost:3000 npx expo start --web               # browser (pemeriksaan sekunder)
 ```
 
 `EXPO_PUBLIC_API_URL` adalah satu-satunya sumber alamat API; tidak ada alamat IP di dalam kode. Nilai
@@ -168,10 +177,9 @@ jatuh ke `http://localhost:3000` bila variabel tidak diisi.
 
 | Target | Nilai | Catatan |
 |---|---|---|
-| Emulator Android | `http://10.0.2.2:3000` | `10.0.2.2` adalah alias host dari emulator |
+| HP fisik | `http://<IP-LAN-komputer>:3000` | HP dan komputer harus satu jaringan |
+| HP fisik lewat USB | `adb reverse tcp:3000 tcp:3000` + `http://localhost:3000` | Dipakai saat verifikasi di perangkat |
 | Web / iOS simulator | `http://localhost:3000` | |
-| Perangkat fisik | `http://<IP-LAN-komputer>:3000` | HP dan komputer harus satu jaringan |
-| Alternatif emulator | `adb reverse tcp:3000 tcp:3000` + `http://localhost:3000` | Dipakai saat verifikasi akhir |
 
 ## Daftar perintah
 
@@ -194,7 +202,7 @@ Mobile (`cd mobile`):
 | Perintah | Fungsi |
 |---|---|
 | `npm start` | Metro (`expo start`) |
-| `npm run android` / `npm run web` | Buka di emulator Android / browser |
+| `npm run android` / `npm run web` | Buka di HP fisik Android (Expo Go) / browser |
 | `npm run typecheck` | `tsc --noEmit` |
 
 ## Akun demo
@@ -252,7 +260,7 @@ berlevel **Tinggi** membuat notifikasi `AI_ALERT` untuk setiap user aktif. Conto
 │   │   └── utils/            # format tanggal/angka, warna pill
 │   └── README.md
 └── docs/
-    ├── API_CONTRACT.md       # kontrak 37 endpoint
+    ├── API_CONTRACT.md       # kontrak 39 endpoint (37 dokumen + 2 ekstensi)
     ├── HANDOFF.md            # status & cara melanjutkan
     └── scripts/smoke.sh      # smoke test alur API
 ```
@@ -266,17 +274,17 @@ bagian dokumen ke hasil yang benar-benar ada di repository.
 |---|---|---|
 | §3 Struktur project | Backend moduler + mobile Expo | Backend `src/modules/*` (6 modul) dan mobile di `mobile/` dengan route `src/app/...` |
 | §4 Database schema | 7 tabel + enum | 7 tabel Prisma (`users`, `assets`, `asset_locations`, `network_information`, `maintenance_history`, `ai_predictions`, `notifications`) + 7 enum |
-| §5 Backend modules | Auth 3, Asset 6, Maintenance 7, Network 8, AI 6, Notification 7 | Total **37 endpoint** sesuai tabel §7.1 dan `docs/API_CONTRACT.md` |
+| §5 Backend modules | Auth 3, Asset 6, Maintenance 7, Network 8, AI 6, Notification 7 | **39 endpoint** = 37 sesuai tabel §7.1 + 2 ekstensi jadwal/pengingat maintenance (`docs/API_CONTRACT.md`) |
 | §6 AI hybrid engine | 3 lapisan, contoh 83.5 HIGH | 3 lapisan seperti dijelaskan di atas; contoh SRV-001 direproduksi (69.5 + 5 + 9) |
 | §8.1 Test flow | Health, login, create asset, maintenance, predict, notifications | Dijalankan; hasil di tabel "Hasil pengujian" |
 | §8.2 Checklist | 9 baris fitur | Diisi dengan bukti pengamatan nyata (lihat tabel berikut) |
-| §11.2 TODO Production | Unit test Jest minimal 70% coverage | 10 suite / 108 test; statements 91.08%, lines 91.08%, functions 95.00%, branches 75.08% (threshold ditegakkan di `jest.config.mjs`) |
+| §11.2 TODO Production | Unit test Jest minimal 70% coverage | 12 suite / 116 test; statements 89.98%, lines 89.96%, functions 93.93%, branches 73.80% (threshold ditegakkan di `jest.config.mjs`) |
 | §12.1 Sprint 1–4 mobile | Foundation → auth → dashboard/aset → operasional/AI | 4 fase mobile selesai (dashboard, aset, detail 4 tab, maintenance, jaringan, AI, notifikasi, form admin, profil) |
 | Fase 1 Asset management (roadmap) | List, search, filter, detail, navigasi | Selesai |
 | Fase 2 Operational features | Maintenance list/detail, network screen | Selesai |
 | Fase 3 AI & notification | AI screen, top 5, notification center, badge, alert card | Selesai |
 | Fase 4 Admin capabilities | Form tambah/edit/hapus aset, form maintenance | Selesai |
-| Fase 5 Polish & testing | Profil, uji di perangkat, perbaikan UI, HANDOFF | Selesai untuk emulator Android + web; uji di HP fisik belum |
+| Fase 5 Polish & testing | Profil, uji di perangkat, perbaikan UI, HANDOFF | Selesai untuk HP fisik Infinix X6882 + web; emulator tidak dipakai |
 | Fase 6 Deployment | Build APK/IPA, distribusi | **Tidak dikerjakan** (non-goal) |
 
 ### Deviasi yang disengaja
@@ -333,6 +341,33 @@ termasuk jalur 400/401/403/404/409, pagination, urutan, perpindahan lokasi, atur
 upsert/cek jaringan, skor acuan 83.5, rotasi `isActive`, batch `failed[]`, alert HIGH hanya untuk user
 aktif, dan scoping notifikasi per user. Angka di atas adalah hasil `npm run test:coverage`, bukan
 estimasi.
+
+### Brief 9 — jadwal dan pengingat (4 November 2026)
+
+`npm run test:coverage` pada branch `feat/maintenance-schedule`: **12 suite, 116 test lulus**.
+
+| Metrik | Hasil terukur | Threshold |
+|---|---|---|
+| Statements | 827/919 (**89.98%**) | 70% |
+| Branches | 231/313 (**73.80%**) | 60% |
+| Functions | 186/198 (**93.93%**) | 70% |
+| Lines | 816/907 (**89.96%**) | 70% |
+
+Seluruh **39 endpoint** dieksekusi lewat `supertest`, termasuk batas jadwal (kemarin, hari ini, +7,
++8, +30, +31), `window` tidak valid (400), tanpa token (401), teknisi pada trigger (403), fan-out
+idempoten, pengingat baru setelah `nextSchedule` berubah, pembuatan ulang setelah notifikasi dihapus,
+dan user nonaktif yang tidak pernah menerima pengingat.
+
+Verifikasi perangkat pada **Infinix X6882** (Android 14, Expo Go) memakai backend lokal dan database
+test berisi seed:
+
+- Dashboard menampilkan kartu **Jadwal Maintenance** dengan 1 terlewat, 2 ≤ 7 hari, 2 8–30 hari.
+- Tab **Terlewat (1) / 7 hari (2) / 30 hari (4)** menampilkan baris yang sesuai, terlewat lebih dulu.
+- Tombol **Jalankan pengingat** (admin) menampilkan konfirmasi lalu
+  "Tidak ada pengingat baru. 3 jadwal dipindai, 6 sudah pernah dikirim." pada eksekusi kedua.
+- Pusat notifikasi menampilkan `MAINTENANCE_REMINDER` dengan ikon amber; ketuk → detail maintenance.
+  Setelah baris maintenance dihapus, ketuk pengingat membuka tab **Maintenance** aset terkait.
+- Teknisi tidak melihat tombol pengingat.
 
 ### Alur aplikasi (emulator Android dan web)
 
