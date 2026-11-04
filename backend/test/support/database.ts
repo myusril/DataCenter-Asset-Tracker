@@ -2,6 +2,7 @@ import { prisma } from '../../src/config/database.js';
 
 // Child tables first; RESTART IDENTITY keeps ids predictable per test.
 const TABLES = [
+  'device_tokens',
   'notifications',
   'ai_predictions',
   'maintenance_history',
