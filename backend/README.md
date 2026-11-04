@@ -6,8 +6,8 @@ prediksi risiko hibrida, dan notifikasi.
 - **Express 5 + TypeScript** (`module: node16`), runtime dev `tsx`
 - **Prisma 6.19.3** + **PostgreSQL 16**
 - Validasi **Zod**, password **bcryptjs**, token **jsonwebtoken**
-- **37 endpoint** (Auth 3, Asset 6, Maintenance 7, Network 8, AI 6, Notification 7) — rincian di
-  `../docs/API_CONTRACT.md`
+- **42 endpoint** (Auth 3, Asset 6, Maintenance 9, Network 8, AI 6, Notification 9) — rincian di
+  `../docs/API_CONTRACT.md`. Notifikasi in-app tetap sumber kebenaran; push FCM hanya cerminnya.
 
 ## Prasyarat
 
@@ -40,6 +40,9 @@ Variabel `.env` (nama saja; file `.env` tidak di-commit):
 | `CORS_ORIGIN` | tidak | Daftar origin dipisah koma. Kosong = pantulkan origin request (lokal); isi sebelum deploy |
 | `SEED_ADMIN_PASSWORD` | untuk seed | Minimal 8 karakter; hanya dibaca `prisma db seed` |
 | `SEED_TECH_PASSWORD` | untuk seed | Minimal 8 karakter; hanya dibaca `prisma db seed` |
+| `REMINDER_JOB_ENABLED` | tidak | `true` mengaktifkan job pengingat harian 07.00; default `false` |
+| `PUSH_ENABLED` | tidak | `true` mengaktifkan pengiriman FCM; default `false` (no-op) |
+| `FIREBASE_SERVICE_ACCOUNT` | untuk push | Path absolut JSON service account di server (mode `600`, milik akun layanan); jangan di-commit |
 
 `src/config/env.ts` memuat `.env` dengan `process.loadEnvFile`; variabel yang sudah diekspor di shell
 menang, sehingga nilai sementara bisa diuji tanpa mengubah file (mis. memutar `JWT_SECRET`).
@@ -80,7 +83,7 @@ memprediksi). Untuk demo manual, kondisi serupa dibuat dengan menambah maintenan
 ```
 backend/
 ├── prisma/
-│   ├── schema.prisma        # 7 tabel + enum
+│   ├── schema.prisma        # 8 tabel + enum
 │   ├── migrations/
 │   └── seed.ts
 ├── src/
@@ -94,7 +97,7 @@ backend/
 │   │   ├── maintenance/     # 4 file
 │   │   ├── network/         # 4 file
 │   │   ├── ai-prediction/   # 7 file (schema, statistical, pattern, explanation, service, controller, routes)
-│   │   └── notification/    # 4 file
+│   │   └── notification/    # 5 file (termasuk push.provider.ts)
 │   └── utils/               # jwt, password, response, logger, serialize, validation
 ├── jest.config.mjs
 ├── jest.setup.cjs
@@ -112,7 +115,7 @@ backend/
 | Maintenance | `GET /api/maintenance`, `GET /api/maintenance/statistics`, `GET /api/maintenance/asset/:assetId`, `GET /api/maintenance/:id`, `POST`, `PUT /:id`, `DELETE /:id` |
 | Network | `GET /api/network`, `GET /api/network/statistics`, `GET /api/network/asset/:assetId`, `GET /api/network/:id`, `POST /api/network` (upsert), `PUT /:id`, `DELETE /:id`, `POST /api/network/:id/check` |
 | AI | `GET /api/ai/predictions`, `GET /api/ai/predictions/asset/:assetId`, `GET /api/ai/risk-summary`, `GET /api/ai/explain/:assetId`, `POST /api/ai/predict/:assetId`, `POST /api/ai/predict-batch` |
-| Notification | `GET /api/notifications`, `GET /api/notifications/unread-count`, `GET /api/notifications/:id`, `PUT /api/notifications/:id/read`, `PUT /api/notifications/read-all`, `DELETE /api/notifications/:id`, `DELETE /api/notifications/read` |
+| Notification | `GET /api/notifications`, `GET /api/notifications/unread-count`, `GET /api/notifications/:id`, `PUT /api/notifications/:id/read`, `PUT /api/notifications/read-all`, `DELETE /api/notifications/:id`, `DELETE /api/notifications/read`, `POST /api/notifications/device`, `DELETE /api/notifications/device` |
 | Health | `GET /health` |
 
 Semua endpoint selain health dan auth membutuhkan `Authorization: Bearer <token>`. Penulisan data
@@ -127,7 +130,8 @@ Jest berjalan sebagai ESM (`NODE_OPTIONS=--experimental-vm-modules`) dengan dua 
   kondisi memburuk, reproduksi contoh SRV-001 = 83.5) dan penolakan token dengan algoritma lain
   (`none`, `HS512`) maupun secret yang salah.
 - **Integration test HTTP** (`supertest` terhadap `createApp()` dan PostgreSQL khusus test): seluruh
-  **37 endpoint** plus health, mencakup jalur error 400, 401, 403, 404, dan 409.
+  **42 endpoint** plus health, mencakup jalur error 400, 401, 403, 404, dan 409, termasuk
+  upsert/pemindahan token perangkat, penolakan hapus token user lain, dan pemangkasan token FCM.
 
 ### Database test terpisah
 
@@ -146,22 +150,23 @@ melakukan `TRUNCATE` sebelum test. Setelah selesai, `npm run test:db:drop` mengh
 
 ### Hasil terukur
 
-Diukur dengan `npm run test:coverage` pada 31 Oktober 2026 (Node 24.21.0, PostgreSQL 16 port 5433):
-**10 suite, 108 test, semuanya lulus**.
+Diukur dengan `npm run test:coverage` pada 4 November 2026 (Node 24.21.0, PostgreSQL 16 port 5433):
+**14 suite, 143 test, semuanya lulus**.
 
 | Metrik | Hasil | Threshold |
 |---|---|---|
-| Statements | 766/841 (**91.08%**) | 70% |
-| Branches | 211/281 (**75.08%**) | 60% |
-| Functions | 171/180 (**95.00%**) | 70% |
-| Lines | 756/830 (**91.08%**) | 70% |
+| Statements | 955/1064 (**89.75%**) | 70% |
+| Branches | 281/382 (**73.56%**) | 60% |
+| Functions | 211/224 (**94.19%**) | 70% |
+| Lines | 943/1051 (**89.72%**) | 70% |
 
 `collectCoverageFrom` mencakup `src/**/*.ts` kecuali `src/server.ts` (entry point proses). Threshold
 ditegakkan di `jest.config.mjs`, sehingga `npm run test:coverage` gagal bila turun di bawah nilai itu.
 `src/config/env.ts` hanya 54.54% statements karena jalur `process.exit(1)` sengaja tidak dijalankan.
 
-Suite integration baru: `auth.api` (17 test), `asset.api` (23), `maintenance.api` (18), `network.api`
-(14), `ai.api` (15), `notification.api` (8), dan `app` (3). 10 test lama tidak diubah.
+Suite integration: `auth.api` (17 test), `asset.api` (23), `maintenance.api` (18), `network.api`
+(14), `ai.api` (15), `notification.api` (8), `push` (10), `profile.api` (17), `reminders` (5),
+`schedule.api` (9), dan `app` (3), ditambah unit test mesin AI dan JWT.
 
 - **Smoke alur API**: `bash docs/scripts/smoke.sh` (dari root) menjalankan health → login → aset →
   maintenance → jaringan → prediksi → notifikasi dengan `curl`; body JSON diolah memakai `python3`
@@ -177,3 +182,5 @@ Suite integration baru: `auth.api` (17 test), `asset.api` (23), `maintenance.api
   menyesatkan.
 - Skor maksimum yang dapat dicapai dengan bobot saat ini adalah 99; clamp 100 adalah pengaman.
 - Mesin risiko deterministik dan tidak memanggil layanan AI eksternal; tidak ada klaim akurasi.
+- Push memerlukan service account Firebase di server. Tanpa itu `PUSH_ENABLED` tetap `false` dan
+  provider menjadi no-op; tidak ada pengiriman ke perangkat dan tidak ada kegagalan API.
