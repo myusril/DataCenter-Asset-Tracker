@@ -13,6 +13,7 @@ interface AuthState {
   isSubmitting: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  updateUser: (user: User) => void;
   loadFromStorage: () => Promise<void>;
 }
 
@@ -36,6 +37,12 @@ export const useAuthStore = create<AuthState>()(
 
       logout() {
         set({ token: null, user: null });
+      },
+
+      // The persisted session is the only copy of the profile, so a successful
+      // edit must replace it or the greeting/avatar would stay stale.
+      updateUser(user) {
+        set({ user });
       },
 
       async loadFromStorage() {

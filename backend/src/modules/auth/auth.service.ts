@@ -7,7 +7,7 @@ import { AppError } from '../../utils/response.js';
 import type { LoginInput, RegisterInput } from './auth.schema.js';
 
 /** Everything except passwordHash, safe to send to clients. */
-const publicUserSelect = {
+export const publicUserSelect = {
   id: true,
   username: true,
   email: true,

@@ -8,8 +8,9 @@ dulu, bukan dilakukan diam-diam saat mengerjakan mobile.
 - Content type: `application/json`
 - Semua endpoint selain `GET /health`, `POST /api/auth/register`, dan `POST /api/auth/login`
   membutuhkan header `Authorization: Bearer <token>`.
-- Total endpoint: **39** = 37 dari dokumen (Auth 3, Asset 6, Maintenance 7, Network 8, AI 6,
-  Notification 7) + **2 ekstensi** jadwal dan pengingat maintenance.
+- Total endpoint: **40** = 37 dari dokumen (Auth 3, Asset 6, Maintenance 7, Network 8, AI 6,
+  Notification 7) + **3 ekstensi**: 2 jadwal/pengingat maintenance dan 1 profil sendiri
+  (`PATCH /api/users/me`).
 
 ## 1. Response envelope
 
@@ -133,6 +134,63 @@ database, sehingga akun yang dinonaktifkan langsung kehilangan akses.
 - Login dengan kredensial salah → **401** `"Invalid username or password"`.
 - Login dengan `isActive: false` → **403** `"Account is inactive"`.
 - Login sukses memperbarui `lastLogin`.
+
+### Profil sendiri (ekstensi)
+
+`PATCH /api/users/me` memperbarui profil **user yang sedang login**. Tidak ada `/:id`, jadi seorang
+user tidak bisa mengubah profil user lain. Field yang boleh dikirim hanya:
+
+| Field | Aturan |
+|---|---|
+| `fullName` | string 1–100 karakter (di-trim) |
+| `email` | email valid, maksimal 255 karakter, unik |
+| `password` | password baru, 8–72 karakter |
+| `currentPassword` | wajib bersama `password`, tidak dipakai bila `password` tidak dikirim |
+
+Semua field opsional, tetapi body kosong → **400**. Field lain (`username`, `role`, `isActive`)
+**ditolak 400** (`Validation failed`, pesan `Unrecognized key ...`), bukan diabaikan diam-diam.
+
+```json
+{
+  "success": true,
+  "message": "Profile updated successfully",
+  "data": {
+    "user": {
+      "id": 1,
+      "username": "admin",
+      "email": "admin@datacenter.local",
+      "fullName": "Administrator DC",
+      "role": "ADMIN",
+      "isActive": true,
+      "lastLogin": "2026-10-30T18:30:49.155Z",
+      "createdAt": "2026-10-30T18:30:38.387Z",
+      "updatedAt": "2026-11-04T10:00:00.000Z"
+    }
+  }
+}
+```
+
+Bentuk `user` sama dengan `GET /api/auth/me`; `passwordHash` tidak pernah dikirim.
+
+| Kondisi | Status | `message` |
+|---|---|---|
+| Body tidak valid / field terlarang / body kosong | 400 | `Validation failed` (+ `errors[]`) |
+| `password` tanpa `currentPassword` | 400 | `Validation failed`, `errors[0].field = "currentPassword"` |
+| `currentPassword` tanpa `password` | 400 | `Validation failed`, `errors[0].field = "password"` |
+| `password` kurang dari 8 karakter | 400 | `Validation failed` |
+| `currentPassword` salah | 400 | `Current password is incorrect` |
+| Email sudah dipakai user lain | 409 | `A user with this email already exists` (+ `errors[]`) |
+| Token tidak ada / tidak valid / akun nonaktif | 401 | `Authentication required` / `Invalid or expired token` / `User account is not available` |
+
+- Pemeriksaan email unik mengecualikan baris pemanggil, sehingga mengirim email yang sama dengan
+  miliknya sendiri tetap **200**.
+- Password baru di-hash ulang dengan bcrypt (cost 10).
+- **Mengganti password tidak membatalkan JWT yang sedang dipakai**: token membawa id user, bukan
+  sidik jari kredensial, dan setiap request memuat ulang baris user. Aplikasi mobile memilih untuk
+  logout setelah password berganti; klien lain boleh tetap memakai token sampai kedaluwarsa.
+- Perubahan `fullName` langsung terlihat pada respons dan pada greeting/avatar setelah store mobile
+  diperbarui.
+
 
 ## 3. Asset
 
@@ -802,6 +860,7 @@ dan LOW tidak membuat alert.
 | 11 | `risk-summary` tidak mendefinisikan populasi hitungan | `counts`/`averageScore` dari prediksi aktif; `assetsWithoutPrediction` dari seluruh riwayat |
 | 12 | Clamp akhir 100 | Skor maksimum yang dapat dicapai adalah 99; clamp 100 adalah pengaman |
 | 13 | Dokumen tidak menyediakan endpoint jadwal/pengingat maintenance | Ditambahkan 2 endpoint ekstensi (`GET /api/maintenance/schedule`, `POST /api/maintenance/reminders`) tanpa mengubah bentuk endpoint lama; total menjadi 39 |
+| 14 | Dokumen tidak menyediakan endpoint ubah profil; layar profil semula hanya baca | Ditambahkan 1 endpoint ekstensi `PATCH /api/users/me` (self only, field `username`/`role`/`isActive` ditolak 400); total menjadi 40 |
 
 Kontrak AI dan notification di atas dipakai oleh tahap mobile. Mesin AI tetap deterministik:
 jangan menambahkan klaim akurasi atau menyebutnya sebagai model yang dilatih.

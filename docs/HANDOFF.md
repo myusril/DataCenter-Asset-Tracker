@@ -4,11 +4,14 @@ Dokumen ini mencatat status pekerjaan terakhir agar sesi berikutnya bisa melanju
 
 ## Status
 
-Brief 9 (jadwal maintenance + pengingat otomatis) selesai pada branch `feat/maintenance-schedule`
-(4 commit). Backend mendapat 2 endpoint ekstensi dan job harian; mobile mendapat layar `/schedule`,
-kartu dashboard, dan pemetaan notifikasi `MAINTENANCE_REMINDER`. Total endpoint kini **39**
-(37 dari dokumen + 2 ekstensi). Branch belum di-merge ke `main`; mahasiswa yang melakukan merge,
-menjalankan migrasi, dan menyalakan job di lingkungan uji.
+Brief 10 (ubah profil sendiri) selesai pada branch `feat/profile-edit` (3 commit). Backend mendapat
+`PATCH /api/users/me` (nama, email, password; self only) dan mobile mendapat panel **Edit profil** di
+layar Profil untuk admin maupun teknisi. Total endpoint kini **40** = 37 dari dokumen + 3 ekstensi
+(jadwal/pengingat maintenance dan profil sendiri). Tidak ada perubahan skema/migrasi. Branch belum
+di-merge ke `main`; mahasiswa yang melakukan merge dan men-deploy backend.
+
+Brief 9 (jadwal maintenance + pengingat otomatis) sudah di `main`: 2 endpoint ekstensi dan job harian,
+layar `/schedule`, kartu dashboard, dan pemetaan notifikasi `MAINTENANCE_REMINDER`.
 
 Sudah tersedia:
 
@@ -27,14 +30,18 @@ Sudah tersedia:
   ringkasan aset, hasil terakhir) dan `POST /api/maintenance/reminders` (ADMIN, idempoten, satu
   `MAINTENANCE_REMINDER` per user aktif per jadwal). Job `node-cron` 07.00 aktif hanya bila
   `REMINDER_JOB_ENABLED=true`.
-- Pengujian backend: **12 suite / 116 test** (`npm run test:coverage`) — unit test mesin AI +
-  verifikasi token, dan integration test HTTP untuk 39 endpoint dengan database
-  `datacenter_tracker_test`. Statements 89.98%, lines 89.96%, functions 93.93%, branches 73.80%;
+- Profil sendiri: `PATCH /api/users/me` memperbarui `fullName`, `email`, dan/atau `password`
+  (dengan `currentPassword`) milik user yang login. `username`, `role`, dan `isActive` ditolak 400;
+  email unik mengecualikan baris pemanggil (409); password di-hash ulang bcrypt cost 10; JWT yang
+  sedang dipakai tetap sah setelah password berubah (mobile memilih logout).
+- Pengujian backend: **13 suite / 133 test** (`npm run test:coverage`) — unit test mesin AI +
+  verifikasi token, dan integration test HTTP untuk 40 endpoint dengan database
+  `datacenter_tracker_test`. Statements 89.81%, lines 89.78%, functions 93.59%, branches 74.18%;
   threshold di `jest.config.mjs`. Smoke flow API tetap ada di `docs/scripts/smoke.sh`.
 - Aplikasi mobile lengkap: login/auto-login, dashboard, daftar aset, detail aset 4 tab, maintenance
   (daftar/detail/form), jaringan (daftar + cek), tab AI (ringkasan, top 5, dialog explain, prediksi
-  batch), pusat notifikasi dengan badge, jadwal maintenance, form tambah/ubah/hapus aset, profil,
-  dan role gating.
+  batch), pusat notifikasi dengan badge, jadwal maintenance, form tambah/ubah/hapus aset, profil
+  (termasuk **Edit profil**: nama, email, password), dan role gating.
 
 ## Inventaris layar mobile
 
@@ -45,7 +52,7 @@ Sudah tersedia:
 | `/(tabs)/assets` | Daftar aset | semua role | Cari, filter, pagination, tarik-untuk-muat-ulang; tombol tambah (ADMIN) |
 | `/(tabs)/ai` | Analisis risiko | semua role | Rata-rata, jumlah per level, top 5, explain; tombol prediksi batch (ADMIN) |
 | `/(tabs)/notifications` | Notifikasi | semua role | Badge, mark read, mark all, hapus, ketuk alert → aset |
-| `/(tabs)/profile` | Profil | semua role | Identitas, role, versi, logout |
+| `/(tabs)/profile` | Profil | semua role | Identitas, role, versi, **Edit profil** (nama, email, password + konfirmasi + password saat ini), logout |
 | `/asset/[id]` | Detail aset | semua role | Tab Umum/Jaringan/Maintenance/AI; aksi tulis (ADMIN) |
 | `/asset/new` | Tambah aset | ADMIN | Form Umum + Lokasi + Jaringan |
 | `/asset/[id]/edit` | Ubah aset | ADMIN | Prefill dari detail |
@@ -58,7 +65,7 @@ Sudah tersedia:
 Teknisi tidak melihat kontrol tulis di layar mana pun; membuka rute admin langsung menampilkan
 "Akses ditolak".
 
-## Endpoint modul (39) + health (1)
+## Endpoint modul (40) + health (1)
 
 | Modul | Jumlah | Path |
 |---|---|---|
@@ -68,7 +75,8 @@ Teknisi tidak melihat kontrol tulis di layar mana pun; membuka rute admin langsu
 | Network | 8 | `GET /api/network`, `GET /api/network/statistics`, `GET /api/network/asset/:assetId`, `GET /api/network/:id`, `POST /api/network`, `PUT /:id`, `DELETE /:id`, `POST /api/network/:id/check` |
 | AI | 6 | `GET /api/ai/predictions`, `GET /api/ai/predictions/asset/:assetId`, `GET /api/ai/risk-summary`, `GET /api/ai/explain/:assetId`, `POST /api/ai/predict/:assetId`, `POST /api/ai/predict-batch` |
 | Notification | 7 | `GET /api/notifications`, `GET /api/notifications/unread-count`, `GET /api/notifications/:id`, `PUT /api/notifications/:id/read`, `PUT /api/notifications/read-all`, `DELETE /api/notifications/:id`, `DELETE /api/notifications/read` |
-| Health (di luar 39) | 1 | `GET /health` |
+| User | 1 | `PATCH /api/users/me` (ekstensi, self only) |
+| Health (di luar 40) | 1 | `GET /health` |
 
 Bentuk respons, status code, dan aturan tiap modul ada di `docs/API_CONTRACT.md`.
 
@@ -93,7 +101,7 @@ Bentuk respons, status code, dan aturan tiap modul ada di `docs/API_CONTRACT.md`
 cd backend
 npx tsc --noEmit
 npm run test:db:prepare     # buat + migrasi + kosongkan datacenter_tracker_test
-npm run test:coverage       # 12 suite / 116 test + threshold
+npm run test:coverage       # 13 suite / 133 test + threshold
 npm run test:db:drop        # hapus database test
 npm run dev
 
@@ -136,6 +144,12 @@ Selama pengujian manual brief 4, data demo ikut berubah (ini normal, bukan bug):
   seed demo; migrasi `20261104090000_add_maintenance_reminders` hanya dijalankan ke
   `datacenter_tracker_test`. Database demo dan lingkungan uji perlu `npx prisma migrate deploy`
   sekali sebelum endpoint baru dipakai, dan `REMINDER_JOB_ENABLED=true` bila job harian diinginkan.
+- Brief 10 tidak menambah migrasi. Uji perangkat memakai backend lokal dan database demo: nama,
+  email, dan password akun `admin` sempat diubah lalu **dikembalikan ke nilai seed**
+  (`Administrator`, `admin@datacenter.local`, password seed), dan nama `teknisi1` yang sempat diubah
+  ke "Budi Teknisi" dikembalikan ke "Budi Santoso". Brief ini tidak menambah/menghapus baris demo:
+  2 user, 9 aset, 14 maintenance, dan 79 prediksi (angka prediksi sudah 79 sebelum brief berjalan,
+  hasil sesi sebelumnya; catatan "70" pada handoff brief 9 sudah usang).
 
 Untuk mengembalikan data demo ke kondisi seed (lokal, destruktif):
 
