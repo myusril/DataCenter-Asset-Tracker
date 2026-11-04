@@ -70,6 +70,9 @@ lengkap ada di bagian [Riwayat pengembangan](#riwayat-pengembangan).
   tandai semua dibaca, hapus satu, hapus yang sudah dibaca, waktu relatif, ketuk alert AI → detail
   aset, dan ketuk pengingat maintenance → detail maintenance (atau tab Maintenance aset bila catatan
   sudah dihapus).
+- Profil: panel **Edit profil** untuk nama lengkap, email, dan (opsional) password sendiri — validasi
+  inline, toast sukses, greeting/avatar langsung ikut berubah, dan sesi berakhir otomatis setelah
+  password diganti. Berlaku untuk admin maupun teknisi.
 - Admin: form tambah/ubah aset (Umum + Lokasi + Jaringan, validasi inline), hapus aset dengan dialog
   konfirmasi dan pesan konflik 409 yang terbaca, form catat maintenance dengan pemilih aset.
 - Teknisi: seluruh kontrol tulis disembunyikan; rute admin yang dibuka langsung menampilkan
@@ -278,7 +281,7 @@ bagian dokumen ke hasil yang benar-benar ada di repository.
 | §6 AI hybrid engine | 3 lapisan, contoh 83.5 HIGH | 3 lapisan seperti dijelaskan di atas; contoh SRV-001 direproduksi (69.5 + 5 + 9) |
 | §8.1 Test flow | Health, login, create asset, maintenance, predict, notifications | Dijalankan; hasil di tabel "Hasil pengujian" |
 | §8.2 Checklist | 9 baris fitur | Diisi dengan bukti pengamatan nyata (lihat tabel berikut) |
-| §11.2 TODO Production | Unit test Jest minimal 70% coverage | 13 suite / 133 test; statements 89.80%, lines 89.77%, functions 93.59%, branches 74.26% (threshold ditegakkan di `jest.config.mjs`) |
+| §11.2 TODO Production | Unit test Jest minimal 70% coverage | 13 suite / 133 test; statements 89.81%, lines 89.78%, functions 93.59%, branches 74.18% (threshold ditegakkan di `jest.config.mjs`) |
 | §12.1 Sprint 1–4 mobile | Foundation → auth → dashboard/aset → operasional/AI | 4 fase mobile selesai (dashboard, aset, detail 4 tab, maintenance, jaringan, AI, notifikasi, form admin, profil) |
 | Fase 1 Asset management (roadmap) | List, search, filter, detail, navigasi | Selesai |
 | Fase 2 Operational features | Maintenance list/detail, network screen | Selesai |
@@ -368,6 +371,44 @@ test berisi seed:
 - Pusat notifikasi menampilkan `MAINTENANCE_REMINDER` dengan ikon amber; ketuk → detail maintenance.
   Setelah baris maintenance dihapus, ketuk pengingat membuka tab **Maintenance** aset terkait.
 - Teknisi tidak melihat tombol pengingat.
+
+### Brief 10 — ubah profil (4 November 2026)
+
+`npm run test:coverage` pada branch `feat/profile-edit`: **13 suite, 133 test lulus** (tanpa migrasi;
+`PATCH /api/users/me` adalah ekstensi ketiga, total **40 endpoint**).
+
+| Metrik | Hasil terukur | Threshold |
+|---|---|---|
+| Statements | 864/962 (**89.81%**) | 70% |
+| Branches | 250/337 (**74.18%**) | 60% |
+| Functions | 190/203 (**93.59%**) | 70% |
+| Lines | 853/950 (**89.78%**) | 70% |
+
+Suite baru `profile.api.test.ts` berisi 17 test: ubah nama/email, email sendiri tidak konflik, teknisi
+boleh mengubah profilnya sendiri, ganti password (hash bcrypt baru, password lama ditolak, token lama
+tetap sah), kombinasi nama+email+password, password saat ini salah, password tanpa `currentPassword`,
+`currentPassword` tanpa password, password < 8 karakter, email tidak valid, email milik user lain
+(409), `username`/`role`/`isActive` ditolak 400, body kosong, tanpa token, token tidak valid, tidak ada
+rute ubah user lain, dan akun nonaktif.
+
+Verifikasi perangkat pada **Infinix X6882** (Android 14, Expo Go) dengan backend lokal
+(`localhost:3000` lewat `adb reverse`) dan database demo:
+
+- Layar Profil menampilkan tombol **Edit profil** untuk admin dan teknisi; panel berisi nama lengkap,
+  email, lalu bagian password (baru, konfirmasi, saat ini).
+- Nama "Administrator DC" → header dan avatar berubah ("AD") dan toast "Profil berhasil diperbarui."
+  muncul. Mengganti nama depan menjadi "Admin DC" mengubah sapaan dashboard menjadi "Admin" tanpa
+  muat ulang.
+- Email diubah ke `admin.dc@datacenter.local` dan langsung tampil di kartu Informasi akun; email milik
+  teknisi ditolak dengan pesan di field email **"Email sudah dipakai akun lain."**
+- Validasi di layar: password < 8 karakter, konfirmasi tidak cocok, dan password saat ini kosong
+  tampil sebagai tiga pesan inline sebelum request dikirim.
+- Password saat ini yang salah dijawab server dan tampil sebagai **"Password saat ini salah."**
+- Ganti password → toast lalu kembali ke layar login; password lama menghasilkan
+  "Invalid username or password", password baru berhasil masuk. Password akun demo dikembalikan ke
+  nilai seed setelah pengujian.
+- Teknisi (Budi Santoso) dapat mengubah profilnya sendiri ("Budi Teknisi", toast sukses, avatar "BT"),
+  lalu nilainya dikembalikan. Tidak ada kontrol untuk mengubah user lain.
 
 ### Alur aplikasi (emulator Android dan web)
 

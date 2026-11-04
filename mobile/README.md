@@ -41,7 +41,12 @@ grafik.
 - **Form admin aset** — bagian Umum, Lokasi, dan Jaringan; validasi inline tanpa library schema;
   prefill saat mengedit; pesan konflik 409 yang terbaca (kode/serial duplikat, aset masih punya
   riwayat).
-- **Profil** — identitas, role, versi aplikasi, dan logout dengan konfirmasi.
+- **Profil** — identitas, role, versi aplikasi, dan logout dengan konfirmasi. Semua role mendapat
+  panel **Edit profil** (`PATCH /api/users/me`): nama lengkap dan email diperbarui inline, password
+  opsional beserta konfirmasi dan password saat ini, validasi di layar sebelum dikirim, toast sukses,
+  dan store auth langsung diganti sehingga greeting/avatar tidak menunggu muat ulang. Email duplikat
+  tampil sebagai pesan di field email; password saat ini yang salah tampil di field tersebut; setelah
+  password berganti aplikasi keluar ke layar login agar kredensial baru terbukti.
 
 ## Sistem desain (fase 1 + 2)
 
@@ -193,7 +198,7 @@ mobile/
 ├── app.json                 # nama, scheme, plugin expo-router
 ├── .env.example             # EXPO_PUBLIC_API_URL
 └── src/
-    ├── api/                 # client axios, session bridge, auth, assets, maintenance, network, ai, notifications
+    ├── api/                 # client axios, session bridge, auth, users, assets, maintenance, network, ai, notifications
     ├── app/                 # route Expo Router
     │   ├── _layout.tsx      # hydration gate + Stack + pendaftaran handler 401
     │   ├── index.tsx        # redirect sesuai status login

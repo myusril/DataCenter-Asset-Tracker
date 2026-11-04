@@ -24,6 +24,7 @@ interface FormFieldProps {
   multiline?: boolean;
   maxLength?: number;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  secureTextEntry?: boolean;
 }
 
 export function FormField({
@@ -37,6 +38,7 @@ export function FormField({
   multiline = false,
   maxLength,
   autoCapitalize = 'sentences',
+  secureTextEntry = false,
 }: FormFieldProps) {
   return (
     <View style={styles.field}>
@@ -50,6 +52,7 @@ export function FormField({
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={colors.muted}
+        secureTextEntry={secureTextEntry}
         style={[styles.input, multiline ? styles.inputMultiline : null, error ? styles.inputError : null]}
         value={value}
       />
