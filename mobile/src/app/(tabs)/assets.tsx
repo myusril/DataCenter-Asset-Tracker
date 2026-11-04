@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -18,13 +20,16 @@ import { fetchAssets } from '../../api/assets';
 import { extractErrorMessage } from '../../api/client';
 import { AssetCard } from '../../components/AssetCard';
 import { Button } from '../../components/Button';
-import { Chip } from '../../components/Chip';
 import { Card } from '../../components/Card';
+import { Chip } from '../../components/Chip';
 import { EmptyState } from '../../components/EmptyState';
+import { Sheet } from '../../components/Sheet';
+import { AssetListSkeleton } from '../../components/Skeleton';
 import { useIsAdmin } from '../../hooks/useIsAdmin';
-import { Loading } from '../../components/Loading';
 import { colors } from '../../theme/colors';
-import { radius, spacing, typography } from '../../theme/spacing';
+import { radius, spacing } from '../../theme/spacing';
+import { elevation, gradients, layout } from '../../theme/tokens';
+import { fontFamily, text } from '../../theme/typography';
 import type { Asset, AssetStatus, AssetType, Pagination } from '../../types/api';
 import { ASSET_STATUS_LABELS, ASSET_TYPE_LABELS } from '../../utils/format';
 
@@ -54,6 +59,7 @@ export default function AssetsScreen() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<AssetType | null>(null);
   const [statusFilter, setStatusFilter] = useState<AssetStatus | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const [items, setItems] = useState<Asset[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
@@ -139,87 +145,159 @@ export default function AssetsScreen() {
   }
 
   const hasFilter = Boolean(debouncedSearch || typeFilter || statusFilter);
+  const activeFilterCount = (typeFilter ? 1 : 0) + (statusFilter ? 1 : 0);
+
+  function clearTypeStatus() {
+    setTypeFilter(null);
+    setStatusFilter(null);
+  }
+
+  function resetFilters() {
+    setSearch('');
+    setDebouncedSearch('');
+    setTypeFilter(null);
+    setStatusFilter(null);
+  }
 
   return (
     <SafeAreaView edges={['top']} style={styles.safe}>
       <View style={styles.header}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>Aset</Text>
-          <View style={styles.headerActions}>
-            <Text style={styles.count}>
-              {pagination ? `${pagination.total} aset` : 'Memuat...'}
+          <View style={styles.titleBlock}>
+            <Text accessibilityRole="header" style={styles.title}>
+              Aset
             </Text>
-            {isAdmin ? (
-              <Pressable
-                accessibilityLabel="Tambah aset"
-                accessibilityRole="button"
-                onPress={() => router.push('/asset/new')}
-                style={({ pressed }) => [styles.addButton, pressed ? styles.addPressed : null]}
-              >
-                <Ionicons color={colors.surface} name="add" size={16} />
-                <Text style={styles.addLabel}>Aset</Text>
-              </Pressable>
-            ) : null}
+            <Text style={styles.count}>
+              {pagination
+                ? hasFilter
+                  ? `${pagination.total} aset cocok`
+                  : `${pagination.total} aset terdaftar`
+                : loading
+                  ? 'Memuat...'
+                  : 'Jumlah aset tidak tersedia'}
+            </Text>
           </View>
+          {isAdmin ? (
+            <Pressable
+              accessibilityLabel="Tambah aset"
+              accessibilityRole="button"
+              onPress={() => router.push('/asset/new')}
+              style={({ pressed }) => [pressed ? styles.pressed : null]}
+            >
+              <LinearGradient
+                colors={gradients.primaryButton}
+                end={{ x: 1, y: 0 }}
+                start={{ x: 0, y: 0 }}
+                style={styles.addButton}
+              >
+                <Ionicons color={colors.onPrimary} name="add" size={18} />
+                <Text style={styles.addLabel}>Aset</Text>
+              </LinearGradient>
+            </Pressable>
+          ) : null}
         </View>
 
         <View style={styles.searchBox}>
           <Ionicons color={colors.muted} name="search-outline" size={18} />
           <TextInput
+            accessibilityLabel="Cari aset"
             autoCapitalize="none"
             autoCorrect={false}
             onChangeText={setSearch}
-            placeholder="Cari kode, nama, atau serial number"
-            placeholderTextColor={colors.muted}
+            placeholder="Cari kode, nama, atau serial"
+            placeholderTextColor={colors.placeholder}
+            returnKeyType="search"
             style={styles.searchInput}
             value={search}
           />
           {search ? (
-            <Pressable accessibilityRole="button" onPress={() => setSearch('')}>
+            <Pressable
+              accessibilityLabel="Hapus pencarian"
+              accessibilityRole="button"
+              hitSlop={13}
+              onPress={() => setSearch('')}
+            >
               <Ionicons color={colors.muted} name="close-circle" size={18} />
             </Pressable>
           ) : null}
         </View>
 
-        <Text style={styles.filterLabel}>Tipe</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.chipRow}>
-            {TYPE_OPTIONS.map((option) => (
-              <Chip
-                active={typeFilter === option.value}
-                key={option.label}
-                label={option.label}
-                onPress={() => setTypeFilter(option.value)}
-              />
-            ))}
-          </View>
-        </ScrollView>
+        <View style={styles.filterRow}>
+          <Pressable
+            accessibilityLabel={`Filter aset${activeFilterCount > 0 ? `, ${activeFilterCount} aktif` : ''}`}
+            accessibilityRole="button"
+            onPress={() => {
+              Keyboard.dismiss();
+              setFilterOpen(true);
+            }}
+            style={({ pressed }) => [
+              styles.filterButton,
+              activeFilterCount > 0 ? styles.filterButtonActive : null,
+              pressed ? styles.pressed : null,
+            ]}
+          >
+            <Ionicons
+              color={activeFilterCount > 0 ? colors.primary : colors.textSecondary}
+              name="options-outline"
+              size={17}
+            />
+            <Text
+              style={[
+                styles.filterButtonLabel,
+                activeFilterCount > 0 ? styles.filterButtonLabelActive : null,
+              ]}
+            >
+              Filter
+            </Text>
+            {activeFilterCount > 0 ? (
+              <View style={styles.filterCount}>
+                <Text style={styles.filterCountLabel}>{activeFilterCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
 
-        <Text style={styles.filterLabel}>Status</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.chipRow}>
-            {STATUS_OPTIONS.map((option) => (
-              <Chip
-                active={statusFilter === option.value}
-                key={option.label}
-                label={option.label}
-                onPress={() => setStatusFilter(option.value)}
-              />
-            ))}
-          </View>
-        </ScrollView>
+          {activeFilterCount > 0 ? (
+            <ScrollView
+              contentContainerStyle={styles.activeFilters}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.activeFiltersScroll}
+            >
+              {typeFilter ? (
+                <ActiveFilter
+                  label={ASSET_TYPE_LABELS[typeFilter]}
+                  onRemove={() => setTypeFilter(null)}
+                />
+              ) : null}
+              {statusFilter ? (
+                <ActiveFilter
+                  label={ASSET_STATUS_LABELS[statusFilter]}
+                  onRemove={() => setStatusFilter(null)}
+                />
+              ) : null}
+            </ScrollView>
+          ) : (
+            <Text numberOfLines={1} style={styles.filterHint}>
+              Semua tipe dan status
+            </Text>
+          )}
+        </View>
       </View>
 
-      {loading && items.length === 0 ? <Loading message="Memuat aset..." /> : null}
+      {loading && items.length === 0 ? (
+        <View style={styles.skeletonWrap}>
+          <AssetListSkeleton />
+        </View>
+      ) : null}
 
       {error && items.length === 0 && !loading ? (
-        <View style={styles.listState}>
-          <Card title="Gagal memuat aset">
-            <Text style={styles.errorText}>{error}</Text>
-            <Button
-              label="Coba lagi"
-              onPress={() => void loadPage(1, 'initial')}
-              style={styles.retry}
+        <View style={styles.stateWrap}>
+          <Card>
+            <EmptyState
+              action={{ label: 'Coba lagi', onPress: () => void loadPage(1, 'initial') }}
+              illustration="error"
+              message={error}
+              title="Gagal memuat aset"
             />
           </Card>
         </View>
@@ -230,22 +308,29 @@ export default function AssetsScreen() {
           contentContainerStyle={styles.listContent}
           data={items}
           ItemSeparatorComponent={Separator}
+          keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           keyExtractor={(item) => String(item.id)}
           ListEmptyComponent={
             <EmptyState
-              icon="cube-outline"
+              action={hasFilter ? { label: 'Reset filter', onPress: resetFilters } : undefined}
+              illustration={hasFilter ? 'search' : 'assets'}
               message={
                 hasFilter
                   ? 'Coba ubah kata kunci atau filter yang dipilih.'
                   : 'Belum ada aset yang tercatat di server.'
               }
-              title="Tidak ada aset"
+              title={hasFilter ? 'Aset tidak ditemukan' : 'Belum ada aset'}
             />
           }
           ListFooterComponent={
             loadingMore ? (
-              <ActivityIndicator color={colors.accent} style={styles.footer} />
+              <View style={styles.footer}>
+                <ActivityIndicator color={colors.primary} size="small" />
+                <Text style={styles.footerText}>Memuat aset berikutnya...</Text>
+              </View>
+            ) : items.length > 0 ? (
+              <Text style={styles.footerEnd}>Semua aset sudah ditampilkan</Text>
             ) : undefined
           }
           ListHeaderComponent={
@@ -255,18 +340,84 @@ export default function AssetsScreen() {
           onEndReachedThreshold={0.4}
           refreshControl={
             <RefreshControl
-              colors={[colors.accent]}
+              colors={[colors.primary]}
               onRefresh={() => void loadPage(1, 'refresh')}
               refreshing={refreshing}
-              tintColor={colors.accent}
+              tintColor={colors.primary}
             />
           }
           renderItem={({ item }) => (
             <AssetCard asset={item} onPress={() => router.push(`/asset/${item.id}`)} />
           )}
+          showsVerticalScrollIndicator={false}
         />
       ) : null}
+
+      <Sheet
+        onClose={() => setFilterOpen(false)}
+        subtitle="Tipe dan status langsung diterapkan ke daftar."
+        title="Filter aset"
+        visible={filterOpen}
+      >
+        <View style={styles.filterSection}>
+          <Text style={styles.filterSectionTitle}>Tipe aset</Text>
+          <View style={styles.chipWrap}>
+            {TYPE_OPTIONS.map((option) => (
+              <Chip
+                active={typeFilter === option.value}
+                key={`type-${option.label}`}
+                label={option.label}
+                onPress={() => setTypeFilter(option.value)}
+              />
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.filterSection}>
+          <Text style={styles.filterSectionTitle}>Status aset</Text>
+          <View style={styles.chipWrap}>
+            {STATUS_OPTIONS.map((option) => (
+              <Chip
+                active={statusFilter === option.value}
+                key={`status-${option.label}`}
+                label={option.label}
+                onPress={() => setStatusFilter(option.value)}
+              />
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.sheetActions}>
+          <Button
+            disabled={activeFilterCount === 0}
+            label="Reset"
+            onPress={clearTypeStatus}
+            style={styles.sheetButton}
+            variant="secondary"
+          />
+          <Button
+            label="Selesai"
+            onPress={() => setFilterOpen(false)}
+            style={styles.sheetButton}
+          />
+        </View>
+      </Sheet>
     </SafeAreaView>
+  );
+}
+
+function ActiveFilter({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <Pressable
+      accessibilityLabel={`Hapus filter ${label}`}
+      accessibilityRole="button"
+      hitSlop={4}
+      onPress={onRemove}
+      style={({ pressed }) => [styles.activeFilter, pressed ? styles.pressed : null]}
+    >
+      <Text style={styles.activeFilterLabel}>{label}</Text>
+      <Ionicons color={colors.primary} name="close-circle" size={16} />
+    </Pressable>
   );
 }
 
@@ -280,98 +431,184 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+    paddingHorizontal: layout.screenPadding,
     paddingTop: spacing.sm,
   },
   headerRow: {
-    alignItems: 'baseline',
+    alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+  titleBlock: {
+    gap: 2,
+  },
   title: {
-    color: colors.text,
-    fontSize: typography.title,
-    fontWeight: '700',
+    ...text.display,
+    fontSize: 26,
+    lineHeight: 32,
   },
   count: {
+    ...text.caption,
     color: colors.muted,
-    fontSize: typography.caption,
-  },
-  headerActions: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.md,
   },
   addButton: {
+    ...elevation.card,
     alignItems: 'center',
-    backgroundColor: colors.accent,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     flexDirection: 'row',
     gap: 2,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-  },
-  addPressed: {
-    opacity: 0.85,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
   },
   addLabel: {
-    color: colors.surface,
-    fontSize: typography.small,
-    fontWeight: '700',
+    ...text.captionStrong,
+    color: colors.onPrimary,
+    fontFamily: fontFamily.bold,
   },
   searchBox: {
+    ...elevation.card,
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.sm,
-    height: 44,
-    marginTop: spacing.md,
+    minHeight: 50,
     paddingHorizontal: spacing.md,
   },
   searchInput: {
+    ...text.body,
     color: colors.text,
     flex: 1,
-    fontSize: typography.caption,
-    paddingVertical: 0,
+    paddingVertical: spacing.md,
   },
-  filterLabel: {
-    color: colors.muted,
-    fontSize: typography.small,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
-    marginTop: spacing.md,
-  },
-  chipRow: {
+  filterRow: {
+    alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  listContent: {
-    padding: spacing.lg,
-    paddingTop: spacing.md,
+  filterButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
   },
-  listState: {
+  filterButtonActive: {
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.primary,
+  },
+  filterButtonLabel: {
+    ...text.captionStrong,
+    color: colors.textSecondary,
+  },
+  filterButtonLabelActive: {
+    color: colors.primary,
+  },
+  filterCount: {
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    height: 18,
+    justifyContent: 'center',
+    minWidth: 18,
+    paddingHorizontal: 4,
+  },
+  filterCountLabel: {
+    ...text.small,
+    color: colors.onPrimary,
+    fontFamily: fontFamily.bold,
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  activeFiltersScroll: {
+    flex: 1,
+  },
+  activeFilters: {
+    gap: spacing.sm,
+    paddingRight: spacing.xs,
+  },
+  activeFilter: {
+    alignItems: 'center',
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    gap: 6,
+    minHeight: 40,
+    paddingHorizontal: spacing.md,
+  },
+  activeFilterLabel: {
+    ...text.captionStrong,
+    color: colors.primary,
+  },
+  filterHint: {
+    ...text.caption,
+    color: colors.muted,
+    flex: 1,
+  },
+  filterSection: {
+    gap: spacing.sm,
+  },
+  filterSectionTitle: {
+    ...text.captionStrong,
+    color: colors.text,
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  sheetButton: {
+    flex: 1,
+  },
+  skeletonWrap: {
+    paddingTop: spacing.lg,
+  },
+  stateWrap: {
     padding: spacing.lg,
+  },
+  listContent: {
+    paddingBottom: layout.tabBarClearance,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.lg,
   },
   separator: {
     height: spacing.md,
   },
   footer: {
-    marginVertical: spacing.lg,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'center',
+    paddingVertical: spacing.lg,
   },
-  errorText: {
-    color: colors.textSecondary,
-    fontSize: typography.caption,
-    lineHeight: 20,
+  footerText: {
+    ...text.caption,
+    color: colors.muted,
   },
-  retry: {
-    marginTop: spacing.lg,
+  footerEnd: {
+    ...text.small,
+    color: colors.muted,
+    paddingVertical: spacing.lg,
+    textAlign: 'center',
   },
   inlineError: {
-    color: colors.danger,
-    fontSize: typography.small,
+    ...text.caption,
+    color: colors.dangerInk,
     marginBottom: spacing.md,
+  },
+  pressed: {
+    opacity: 0.85,
   },
 });

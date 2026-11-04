@@ -1,16 +1,18 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '../theme/colors';
-import { spacing, typography } from '../theme/spacing';
+import { spacing } from '../theme/spacing';
+import { text } from '../theme/typography';
 
 interface LoadingProps {
   message?: string;
 }
 
+/** Inline spinner for screens that are not moved to skeletons yet. */
 export function Loading({ message = 'Memuat data...' }: LoadingProps) {
   return (
-    <View style={styles.container}>
-      <ActivityIndicator color={colors.accent} size="large" />
+    <View accessibilityLabel={message} accessibilityRole="progressbar" style={styles.container}>
+      <ActivityIndicator color={colors.primary} size="large" />
       <Text style={styles.message}>{message}</Text>
     </View>
   );
@@ -25,7 +27,7 @@ const styles = StyleSheet.create({
     padding: spacing.xxl,
   },
   message: {
+    ...text.caption,
     color: colors.muted,
-    fontSize: typography.caption,
   },
 });

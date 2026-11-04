@@ -1,16 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { StatusBar } from 'expo-status-bar';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type ScrollViewInstance,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fetchRiskExplanation, predictAssetRisk } from '../../../api/ai';
 import { deleteAsset, describeAssetError, fetchAssetDetail } from '../../../api/assets';
@@ -18,20 +22,25 @@ import { extractErrorMessage } from '../../../api/client';
 import { fetchAssetMaintenance } from '../../../api/maintenance';
 import { Button } from '../../../components/Button';
 import { Card } from '../../../components/Card';
+import { ChartCard } from '../../../components/ChartCard';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { DataList, DataRow } from '../../../components/DataList';
 import { EmptyState } from '../../../components/EmptyState';
-import { Loading } from '../../../components/Loading';
-import { ScreenHeader } from '../../../components/ScreenHeader';
+import { RiskGauge } from '../../../components/RiskGauge';
+import { SegmentedTabs } from '../../../components/SegmentedTabs';
+import { AssetDetailSkeleton } from '../../../components/Skeleton';
 import { StatusPill } from '../../../components/StatusPill';
+import { Toast } from '../../../components/Toast';
 import { useIsAdmin } from '../../../hooks/useIsAdmin';
 import { useNotificationStore } from '../../../store/notifications';
 import { colors } from '../../../theme/colors';
-import { radius, spacing, typography } from '../../../theme/spacing';
+import { radius, spacing } from '../../../theme/spacing';
+import { layout, STATUS_GRADIENTS } from '../../../theme/tokens';
+import { text } from '../../../theme/typography';
 import type {
   AssetDetail,
   MaintenanceRecord,
   RiskExplanation,
-  RiskLevel,
 } from '../../../types/api';
 import {
   ASSET_STATUS_LABELS,
@@ -54,16 +63,10 @@ const TABS = [
   { key: 'general', label: 'Umum' },
   { key: 'network', label: 'Jaringan' },
   { key: 'maintenance', label: 'Maintenance' },
-  { key: 'ai', label: 'AI' },
+  { key: 'ai', label: 'Risiko' },
 ] as const;
 
 type TabKey = (typeof TABS)[number]['key'];
-
-const SCORE_COLORS: Record<RiskLevel, string> = {
-  LOW: colors.success,
-  MEDIUM: colors.warning,
-  HIGH: colors.danger,
-};
 
 const FACTOR_LABELS: Record<string, string> = {
   frequency: 'Frekuensi maintenance',
@@ -83,6 +86,7 @@ const FACTOR_LABELS: Record<string, string> = {
 
 export default function AssetDetailScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const isAdmin = useIsAdmin();
   const refreshUnread = useNotificationStore((state) => state.refreshUnread);
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -103,6 +107,8 @@ export default function AssetDetailScreen() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const requestId = useRef(0);
   const scrollRef = useRef<ScrollViewInstance>(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [scrolled, setScrolled] = useState(false);
 
   const load = useCallback(
     async (isRefresh = false) => {
@@ -144,9 +150,7 @@ export default function AssetDetailScreen() {
         setMaintenanceError(extractErrorMessage(maintenanceResult.reason));
       }
 
-      setExplanation(
-        explanationResult.status === 'fulfilled' ? explanationResult.value : null,
-      );
+      setExplanation(explanationResult.status === 'fulfilled' ? explanationResult.value : null);
       setLoading(false);
       setRefreshing(false);
     },
@@ -159,9 +163,17 @@ export default function AssetDetailScreen() {
     }, [load]),
   );
 
+  useEffect(() => {
+    if (!predictNotice) {
+      return;
+    }
+    const timer = setTimeout(() => setPredictNotice(null), 5000);
+    return () => clearTimeout(timer);
+  }, [predictNotice]);
+
   function selectTab(nextTab: TabKey) {
     setTab(nextTab);
-    scrollRef.current?.scrollTo({ y: 0, animated: false });
+    scrollRef.current?.scrollTo({ animated: false, y: 0 });
   }
 
   function goBack() {
@@ -210,26 +222,57 @@ export default function AssetDetailScreen() {
     }
   }
 
+  const barOpacity = scrollY.interpolate({
+    extrapolate: 'clamp',
+    inputRange: [0, 100],
+    outputRange: [0, 1],
+  });
+  const floatingOpacity = scrollY.interpolate({
+    extrapolate: 'clamp',
+    inputRange: [0, 60],
+    outputRange: [1, 0],
+  });
+
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    {
+      useNativeDriver: true,
+      listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const next = event.nativeEvent.contentOffset.y > 72;
+        setScrolled((previous) => (previous === next ? previous : next));
+      },
+    },
+  );
+
   if (loading && !asset) {
     return (
-      <SafeAreaView edges={['top']} style={styles.safe}>
-        <ScreenHeader onBack={goBack} title="Detail Aset" />
-        <Loading message="Memuat detail aset..." />
+      <SafeAreaView edges={[]} style={styles.safe}>
+        <StatusBar style="dark" />
+        <CompactHeader
+          insets={insets.top}
+          onBack={goBack}
+          right={undefined}
+          title="Detail Aset"
+        />
+        <View style={styles.skeletonWrap}>
+          <AssetDetailSkeleton />
+        </View>
       </SafeAreaView>
     );
   }
 
   if (!asset) {
     return (
-      <SafeAreaView edges={['top']} style={styles.safe}>
-        <ScreenHeader onBack={goBack} title="Detail Aset" />
-        <View style={styles.listState}>
-          <Card title="Gagal memuat detail aset">
-            <Text style={styles.bodyText}>{error ?? 'Aset tidak ditemukan.'}</Text>
-            <Button
-              label="Coba lagi"
-              onPress={() => void load()}
-              style={styles.retry}
+      <SafeAreaView edges={[]} style={styles.safe}>
+        <StatusBar style="dark" />
+        <CompactHeader insets={insets.top} onBack={goBack} right={undefined} title="Detail Aset" />
+        <View style={styles.stateWrap}>
+          <Card>
+            <EmptyState
+              action={{ label: 'Coba lagi', onPress: () => void load() }}
+              illustration="error"
+              message={error ?? 'Aset tidak ditemukan.'}
+              title="Gagal memuat detail aset"
             />
           </Card>
         </View>
@@ -238,45 +281,112 @@ export default function AssetDetailScreen() {
   }
 
   const prediction = asset.latestPrediction;
+  const gradient = STATUS_GRADIENTS[asset.status];
+  const maxImpact = Math.max(
+    ...(prediction?.topFactors ?? []).map((factor) => Math.abs(factor.impact)),
+    0,
+  );
+
+  const headerActions = (
+    <View style={styles.headerActions}>
+      <Pressable
+        accessibilityLabel="Kembali"
+        accessibilityRole="button"
+        hitSlop={6}
+        onPress={goBack}
+      >
+        <View style={styles.floatingButton}>
+          <Ionicons color={colors.onPrimary} name="arrow-back" size={20} />
+        </View>
+      </Pressable>
+      {isAdmin ? (
+        <Pressable
+          accessibilityLabel="Ubah aset"
+          accessibilityRole="button"
+          hitSlop={6}
+          onPress={() => router.push(`/asset/${assetId}/edit`)}
+        >
+          <View style={styles.floatingButton}>
+            <Ionicons color={colors.onPrimary} name="create-outline" size={19} />
+          </View>
+        </Pressable>
+      ) : null}
+    </View>
+  );
 
   return (
-    <SafeAreaView edges={['top']} style={styles.safe}>
-      <ScreenHeader
-        onBack={goBack}
-        right={
-          isAdmin ? (
+    <SafeAreaView edges={[]} style={styles.safe}>
+      <StatusBar style={scrolled ? 'dark' : 'light'} />
+      <Animated.View
+        pointerEvents="box-none"
+        style={[
+          styles.compactBar,
+          {
+            opacity: barOpacity,
+            paddingTop: insets.top,
+          },
+        ]}
+      >
+        <View style={styles.compactBarInner}>
+          <Pressable
+            accessibilityLabel="Kembali"
+            accessibilityRole="button"
+            hitSlop={6}
+            onPress={goBack}
+            style={styles.compactButton}
+          >
+            <Ionicons color={colors.text} name="arrow-back" size={20} />
+          </Pressable>
+          <Text numberOfLines={1} style={styles.compactTitle}>
+            {asset.assetName}
+          </Text>
+          {isAdmin ? (
             <Pressable
               accessibilityLabel="Ubah aset"
               accessibilityRole="button"
+              hitSlop={6}
               onPress={() => router.push(`/asset/${assetId}/edit`)}
-              style={styles.headerAction}
+              style={styles.compactButton}
             >
-              <Ionicons color={colors.accent} name="create-outline" size={20} />
+              <Ionicons color={colors.text} name="create-outline" size={19} />
             </Pressable>
-          ) : undefined
-        }
-        title="Detail Aset"
-      />
-      <ScrollView
-        contentContainerStyle={styles.content}
+          ) : (
+            <View style={styles.compactButton} />
+          )}
+        </View>
+      </Animated.View>
+
+      <Animated.View
+        pointerEvents="box-none"
+        style={[styles.floatingActions, { opacity: floatingOpacity, top: insets.top + spacing.sm }]}
+      >
+        {headerActions}
+      </Animated.View>
+
+      <Animated.ScrollView
+        contentContainerStyle={styles.scrollContent}
+        onScroll={handleScroll}
         ref={scrollRef}
         refreshControl={
           <RefreshControl
-            colors={[colors.accent]}
+            colors={[colors.primary]}
             onRefresh={() => void load(true)}
+            progressViewOffset={insets.top + 56}
             refreshing={refreshing}
-            tintColor={colors.accent}
+            tintColor={colors.primary}
           />
         }
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
       >
-        {error ? (
-          <View style={styles.refreshErrorBox}>
-            <Text style={styles.refreshErrorText}>Gagal memperbarui data: {error}</Text>
-          </View>
-        ) : null}
-
-        <Card>
-          <View style={styles.heroTop}>
+        <LinearGradient
+          colors={gradient}
+          end={{ x: 1, y: 1 }}
+          start={{ x: 0, y: 0 }}
+          style={[styles.hero, { paddingTop: insets.top + 64 }]}
+        >
+          <View pointerEvents="none" style={styles.heroBlob} />
+          <View style={styles.heroTopRow}>
             <Text style={styles.heroType}>{ASSET_TYPE_LABELS[asset.assetType]}</Text>
             <StatusPill
               label={ASSET_STATUS_LABELS[asset.status]}
@@ -285,346 +395,337 @@ export default function AssetDetailScreen() {
           </View>
           <Text style={styles.heroName}>{asset.assetName}</Text>
           <Text style={styles.heroCode}>{asset.assetCode}</Text>
+        </LinearGradient>
 
-          <View style={styles.divider} />
+        <View style={styles.content}>
+          {error ? (
+            <View style={styles.refreshErrorBox}>
+              <Ionicons color={colors.dangerInk} name="alert-circle" size={16} />
+              <Text style={styles.refreshErrorText}>Gagal memperbarui data: {error}</Text>
+            </View>
+          ) : null}
 
-          <InfoRow label="Merek" value={asset.brand ?? '-'} />
-          <InfoRow label="Model" value={asset.model ?? '-'} />
-          <InfoRow label="Serial number" value={asset.serialNumber ?? '-'} />
-          <InfoRow label="Garansi sampai" value={formatDate(asset.warrantyEnd)} />
-          <InfoRow
-            label="Lokasi"
-            value={
-              asset.location
-                ? `${asset.location.dataCenter} · ${
-                    asset.location.rack ? `Rack ${asset.location.rack}` : 'Tanpa rack'
-                  }${asset.location.rackSlot ? ` · ${asset.location.rackSlot}` : ''}`
-                : 'Belum diisi'
-            }
+          <SegmentedTabs
+            active={tab}
+            accessibilityLabel="Bagian detail aset"
+            items={TABS}
+            onChange={selectTab}
           />
-        </Card>
 
-        <View style={styles.tabs}>
-          {TABS.map((item) => (
-            <Pressable
-              accessibilityRole="tab"
-              accessibilityState={{ selected: tab === item.key }}
-              key={item.key}
-              onPress={() => selectTab(item.key)}
-              style={[styles.tab, tab === item.key ? styles.tabActive : null]}
-            >
-              <Text style={[styles.tabLabel, tab === item.key ? styles.tabLabelActive : null]}>
-                {item.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+          {tab === 'general' ? (
+            <>
+              <ChartCard title="Spesifikasi">
+                <DataList>
+                  <DataRow label="Merek" value={asset.brand ?? '-'} />
+                  <DataRow label="Model" value={asset.model ?? '-'} />
+                  <DataRow label="Serial number" value={asset.serialNumber ?? '-'} />
+                  <DataRow label="Tanggal pembelian" value={formatDate(asset.purchaseDate)} />
+                  <DataRow label="Garansi sampai" value={formatDate(asset.warrantyEnd)} />
+                  <DataRow label="Dibuat oleh" value={asset.creator?.fullName ?? '-'} />
+                  <DataRow label="Riwayat maintenance" value={`${asset.maintenanceCount} catatan`} />
+                </DataList>
+              </ChartCard>
 
-        {tab === 'general' ? (
-          <>
-            <Card title="Spesifikasi">
-              <InfoRow label="Tipe aset" value={ASSET_TYPE_LABELS[asset.assetType]} />
-              <InfoRow label="Merek" value={asset.brand ?? '-'} />
-              <InfoRow label="Model" value={asset.model ?? '-'} />
-              <InfoRow label="Serial number" value={asset.serialNumber ?? '-'} />
-              <InfoRow label="Tanggal pembelian" value={formatDate(asset.purchaseDate)} />
-              <InfoRow label="Garansi sampai" value={formatDate(asset.warrantyEnd)} />
-              <InfoRow label="Dibuat oleh" value={asset.creator?.fullName ?? '-'} />
-              <InfoRow label="Riwayat maintenance" value={`${asset.maintenanceCount} catatan`} />
-            </Card>
+              <ChartCard title="Lokasi">
+                {asset.location ? (
+                  <DataList>
+                    <DataRow label="Data center" value={asset.location.dataCenter} />
+                    <DataRow label="Rack" value={asset.location.rack ?? '-'} />
+                    <DataRow label="Slot" value={asset.location.rackSlot ?? '-'} />
+                    <DataRow label="Lantai" value={asset.location.floor ?? '-'} />
+                    <DataRow label="Ruangan" value={asset.location.room ?? '-'} />
+                    <DataRow
+                      label="Ditempatkan sejak"
+                      value={formatDateTime(asset.location.movedAt)}
+                    />
+                  </DataList>
+                ) : (
+                  <EmptyState
+                    compact
+                    illustration="assets"
+                    message="Isi lokasi dari formulir ubah aset bila perangkat sudah ditempatkan."
+                    title="Lokasi belum diisi"
+                  />
+                )}
+              </ChartCard>
 
-            <Card title="Lokasi">
-              {asset.location ? (
-                <>
-                  <InfoRow label="Data center" value={asset.location.dataCenter} />
-                  <InfoRow label="Rack" value={asset.location.rack ?? '-'} />
-                  <InfoRow label="Slot" value={asset.location.rackSlot ?? '-'} />
-                  <InfoRow label="Lantai" value={asset.location.floor ?? '-'} />
-                  <InfoRow label="Ruangan" value={asset.location.room ?? '-'} />
-                  <InfoRow label="Ditempatkan sejak" value={formatDateTime(asset.location.movedAt)} />
-                </>
-              ) : (
-                <Text style={styles.bodyText}>Lokasi aset belum diisi.</Text>
-              )}
-            </Card>
-
-            <Card title="Deskripsi">
-              <Text style={styles.bodyText}>
-                {asset.description ?? 'Belum ada deskripsi untuk aset ini.'}
-              </Text>
-            </Card>
-
-            {isAdmin ? (
-              <Card title="Kelola aset">
+              <ChartCard title="Deskripsi">
                 <Text style={styles.bodyText}>
-                  Perubahan data aset, lokasi, dan jaringan dilakukan dari formulir ubah aset.
+                  {asset.description ?? 'Belum ada deskripsi untuk aset ini.'}
                 </Text>
+              </ChartCard>
+
+              {isAdmin ? (
+                <ChartCard title="Kelola aset">
+                  <Text style={styles.bodyText}>
+                    Perubahan data aset, lokasi, dan jaringan dilakukan dari formulir ubah aset.
+                  </Text>
+                  <Button
+                    icon="create-outline"
+                    label="Ubah data aset"
+                    onPress={() => router.push(`/asset/${asset.id}/edit`)}
+                    variant="secondary"
+                  />
+                  <Button
+                    icon="trash-outline"
+                    label="Hapus aset"
+                    onPress={() => {
+                      setDeleteError(null);
+                      setConfirmingDelete(true);
+                    }}
+                    variant="danger"
+                  />
+                </ChartCard>
+              ) : null}
+            </>
+          ) : null}
+
+          {tab === 'network' ? (
+            <ChartCard title="Informasi jaringan">
+              {asset.network ? (
+                <DataList>
+                  <DataRow label="Hostname" value={asset.network.hostname ?? '-'} />
+                  <DataRow label="Alamat IP" value={asset.network.ipAddress ?? '-'} />
+                  <DataRow label="Subnet mask" value={asset.network.subnetMask ?? '-'} />
+                  <DataRow label="Gateway" value={asset.network.gateway ?? '-'} />
+                  <DataRow label="MAC address" value={asset.network.macAddress ?? '-'} />
+                  <DataRow label="Terakhir dicek" value={formatDateTime(asset.network.lastChecked)} />
+                  <DataRow label="Catatan" value={asset.network.notes ?? '-'} />
+                  <View style={styles.statusRow}>
+                    <Text style={styles.statusLabel}>Status koneksi</Text>
+                    <StatusPill
+                      label={CONNECTION_LABELS[asset.network.connectionStatus]}
+                      tone={CONNECTION_TONES[asset.network.connectionStatus]}
+                    />
+                  </View>
+                </DataList>
+              ) : (
+                <EmptyState
+                  illustration="network"
+                  message="Data hostname, IP, dan status koneksi belum diisi untuk aset ini."
+                  title="Belum ada informasi jaringan"
+                />
+              )}
+            </ChartCard>
+          ) : null}
+
+          {tab === 'maintenance' ? (
+            <View style={styles.sectionList}>
+              {isAdmin ? (
                 <Button
-                  label="Ubah data aset"
-                  onPress={() => router.push(`/asset/${asset.id}/edit`)}
-                  style={styles.manageButton}
+                  icon="add"
+                  label="Catat maintenance"
+                  onPress={() => router.push(`/maintenance/new?assetId=${asset.id}`)}
                   variant="secondary"
                 />
-                <Button
-                  label="Hapus aset"
-                  onPress={() => {
-                    setDeleteError(null);
-                    setConfirmingDelete(true);
-                  }}
-                  style={styles.manageButton}
-                  variant="danger"
-                />
-              </Card>
-            ) : null}
-          </>
-        ) : null}
-
-        {tab === 'network' ? (
-          <Card title="Informasi jaringan">
-            {asset.network ? (
-              <>
-                <InfoRow label="Hostname" value={asset.network.hostname ?? '-'} />
-                <InfoRow label="Alamat IP" value={asset.network.ipAddress ?? '-'} />
-                <InfoRow label="Subnet mask" value={asset.network.subnetMask ?? '-'} />
-                <InfoRow label="Gateway" value={asset.network.gateway ?? '-'} />
-                <InfoRow label="MAC address" value={asset.network.macAddress ?? '-'} />
-                <InfoRow label="Terakhir dicek" value={formatDateTime(asset.network.lastChecked)} />
-                <InfoRow label="Catatan" value={asset.network.notes ?? '-'} />
-                <View style={styles.statusRow}>
-                  <Text style={styles.statusLabel}>Status koneksi</Text>
-                  <StatusPill
-                    label={CONNECTION_LABELS[asset.network.connectionStatus]}
-                    tone={CONNECTION_TONES[asset.network.connectionStatus]}
+              ) : null}
+              {maintenanceError ? (
+                <ChartCard title="Gagal memuat riwayat">
+                  <Text style={styles.bodyText}>{maintenanceError}</Text>
+                  <Button label="Coba lagi" onPress={() => void load()} variant="secondary" />
+                </ChartCard>
+              ) : maintenance.length === 0 ? (
+                <ChartCard>
+                  <EmptyState
+                    illustration="maintenance"
+                    message="Catatan perawatan aset ini akan tampil di sini."
+                    title="Belum ada riwayat maintenance"
                   />
-                </View>
-              </>
-            ) : (
-              <EmptyState
-                icon="wifi-outline"
-                message="Data hostname, IP, dan status koneksi belum diisi untuk aset ini."
-                title="Belum ada informasi jaringan"
-              />
-            )}
-          </Card>
-        ) : null}
-
-        {tab === 'maintenance' ? (
-          <View style={styles.sectionList}>
-            {isAdmin ? (
-              <Button
-                label="Catat Maintenance"
-                onPress={() => router.push(`/maintenance/new?assetId=${asset.id}`)}
-                variant="secondary"
-              />
-            ) : null}
-            {maintenanceError ? (
-              <Card title="Gagal memuat riwayat">
-                <Text style={styles.bodyText}>{maintenanceError}</Text>
-                <Button
-                  label="Coba lagi"
-                  onPress={() => void load()}
-                  style={styles.retry}
-                />
-              </Card>
-            ) : maintenance.length === 0 ? (
-              <Card>
-                <EmptyState
-                  icon="construct-outline"
-                  message="Catatan perawatan aset ini akan tampil di sini."
-                  title="Belum ada riwayat maintenance"
-                />
-              </Card>
-            ) : (
-              maintenance.map((record) => (
-                <Pressable
-                  accessibilityRole="button"
-                  key={record.id}
-                  onPress={() => router.push(`/maintenance/${record.id}`)}
-                  style={({ pressed }) => [pressed ? styles.pressedCard : null]}
-                >
-                  <Card>
-                    <View style={styles.recordHeader}>
-                      <StatusPill
-                        label={MAINTENANCE_TYPE_LABELS[record.maintenanceType]}
-                        tone={MAINTENANCE_TYPE_TONES[record.maintenanceType]}
-                      />
-                      <Text style={styles.recordDate}>{formatDate(record.maintenanceDate)}</Text>
-                    </View>
-                    <InfoRow
-                      label="Teknisi"
-                      value={record.technician?.fullName ?? 'Tidak dicatat'}
-                    />
-                    <InfoRow label="Hasil" value={record.result ?? '-'} />
-                    {record.description ? (
-                      <Text style={styles.recordDescription}>{record.description}</Text>
-                    ) : null}
-                    <View style={styles.recordFooter}>
-                      <Text style={styles.recordMeta}>Biaya: {formatCurrency(record.cost)}</Text>
-                      {record.nextSchedule ? (
-                        <Text style={styles.recordMeta}>
-                          Jadwal berikutnya: {formatDate(record.nextSchedule)}
-                        </Text>
-                      ) : null}
-                      <View style={styles.recordLinkRow}>
-                        <Text style={styles.recordLink}>Lihat detail catatan</Text>
-                        <Ionicons color={colors.accent} name="chevron-forward" size={14} />
+                </ChartCard>
+              ) : (
+                maintenance.map((record) => (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={record.id}
+                    onPress={() => router.push(`/maintenance/${record.id}`)}
+                    style={({ pressed }) => [pressed ? styles.pressedCard : null]}
+                  >
+                    <Card>
+                      <View style={styles.recordHeader}>
+                        <StatusPill
+                          label={MAINTENANCE_TYPE_LABELS[record.maintenanceType]}
+                          tone={MAINTENANCE_TYPE_TONES[record.maintenanceType]}
+                        />
+                        <Text style={styles.recordDate}>{formatDate(record.maintenanceDate)}</Text>
                       </View>
-                    </View>
-                  </Card>
-                </Pressable>
-              ))
-            )}
-          </View>
-        ) : null}
+                      <DataList>
+                        <DataRow label="Teknisi" value={record.technician?.fullName ?? 'Tidak dicatat'} />
+                        <DataRow label="Hasil" value={record.result ?? '-'} />
+                      </DataList>
+                      {record.description ? (
+                        <Text style={styles.recordDescription}>{record.description}</Text>
+                      ) : null}
+                      <View style={styles.recordFooter}>
+                        <Text style={styles.recordMeta}>Biaya: {formatCurrency(record.cost)}</Text>
+                        {record.nextSchedule ? (
+                          <Text style={styles.recordMeta}>
+                            Jadwal berikutnya: {formatDate(record.nextSchedule)}
+                          </Text>
+                        ) : null}
+                        <View style={styles.recordLinkRow}>
+                          <Text style={styles.recordLink}>Lihat detail catatan</Text>
+                          <Ionicons color={colors.primary} name="chevron-forward" size={14} />
+                        </View>
+                      </View>
+                    </Card>
+                  </Pressable>
+                ))
+              )}
+            </View>
+          ) : null}
 
-        {tab === 'ai' ? (
-          prediction ? (
-            <View style={styles.sectionList}>
-              <Card title="Prediksi Risiko Aktif">
-                {predictNotice ? (
-                  <View style={styles.predictNotice}>
-                    <Text style={styles.predictNoticeText}>{predictNotice}</Text>
+          {tab === 'ai' ? (
+            prediction ? (
+              <View style={styles.sectionList}>
+                <ChartCard
+                  subtitle="Skor dari mesin heuristik berbasis aturan, statistik, dan pola."
+                  title="Prediksi Risiko Aktif"
+                >
+                  <View style={styles.gaugeWrap}>
+                    <RiskGauge score={prediction.riskScore} size={240} />
                   </View>
-                ) : null}
-                <View style={styles.scoreRow}>
-                  <Text style={[styles.score, { color: SCORE_COLORS[prediction.riskLevel] }]}>
-                    {prediction.riskScore.toFixed(1)}
-                  </Text>
-                  <View style={styles.scoreMeta}>
-                    <Text style={styles.scoreMax}>dari 100</Text>
+                  <View style={styles.predictionMeta}>
                     <StatusPill
                       label={RISK_LABELS[prediction.riskLevel]}
                       tone={RISK_TONES[prediction.riskLevel]}
                     />
+                    <Text style={styles.note}>
+                      {prediction.confidence !== null
+                        ? `Keyakinan internal ${prediction.confidence}%`
+                        : 'Keyakinan internal tidak dicatat'}
+                    </Text>
                   </View>
-                </View>
 
-                <View style={styles.scoreTrack}>
-                  <View
-                    style={[
-                      styles.scoreFill,
-                      {
-                        backgroundColor: SCORE_COLORS[prediction.riskLevel],
-                        width: `${Math.min(Math.max(prediction.riskScore, 0), 100)}%`,
-                      },
-                    ]}
-                  />
-                </View>
-
-                <InfoRow
-                  label="Confidence"
-                  value={prediction.confidence !== null ? `${prediction.confidence}%` : '-'}
-                />
-                <InfoRow
-                  label="Perkiraan kegagalan"
-                  value={
-                    prediction.predictedFailureDays !== null
-                      ? `${prediction.predictedFailureDays} hari`
-                      : '-'
-                  }
-                />
-                <InfoRow label="Versi model" value={prediction.modelVersion} />
-                <InfoRow label="Diprediksi pada" value={formatDateTime(prediction.predictedAt)} />
-                <Text style={styles.disclaimer}>
-                  Skor dihitung oleh mesin heuristik berbasis aturan dan statistik, bukan model
-                  machine learning yang dilatih.
-                </Text>
-
-                {isAdmin ? (
-                  <Button
-                    label="Prediksi ulang"
-                    loading={predicting}
-                    onPress={handlePredict}
-                    style={styles.predictButton}
-                    variant="secondary"
-                  />
-                ) : null}
-              </Card>
-
-              <Card
-                subtitle={
-                  explanation
-                    ? 'Dihitung ulang saat halaman dibuka dan tidak mengubah prediksi tersimpan.'
-                    : undefined
-                }
-                title="Rincian Perhitungan"
-              >
-                {explanation ? (
-                  <>
-                    <InfoRow
-                      label="Lapisan 1 — basis berbobot"
-                      value={explanation.layerBreakdown.layer1.baseScore.toFixed(2)}
+                  <DataList>
+                    <DataRow
+                      label="Perkiraan kegagalan"
+                      value={
+                        prediction.predictedFailureDays !== null
+                          ? `${prediction.predictedFailureDays} hari`
+                          : '-'
+                      }
                     />
-                    <InfoRow
-                      label="Lapisan 2 — penyesuaian statistik"
-                      value={formatAdjustment(explanation.layerBreakdown.layer2.total)}
-                    />
-                    <InfoRow
-                      label="Lapisan 3 — pencocokan pola"
-                      value={formatAdjustment(explanation.layerBreakdown.layer3.total)}
-                    />
-                    <InfoRow
-                      label="Total"
-                      value={explanation.layerBreakdown.final.toFixed(2)}
-                    />
-                  </>
-                ) : (
-                  <Text style={styles.bodyText}>
-                    Rincian perhitungan tidak tersedia saat ini.
+                    <DataRow label="Versi mesin" value={prediction.modelVersion} />
+                    <DataRow label="Diprediksi pada" value={formatDateTime(prediction.predictedAt)} />
+                  </DataList>
+                  <Text style={styles.note}>
+                    Angka ini bukan ramalan pasti dan bukan keluaran model machine learning yang
+                    dilatih.
                   </Text>
-                )}
-              </Card>
 
-              <Card title="Faktor Utama">
-                {(prediction.topFactors ?? []).length === 0 ? (
-                  <Text style={styles.bodyText}>Tidak ada faktor yang dicatat.</Text>
-                ) : (
-                  (prediction.topFactors ?? []).map((factor) => (
-                    <View key={factor.name} style={styles.factorRow}>
-                      <View style={styles.factorHeader}>
-                        <Text style={styles.factorName}>
-                          {FACTOR_LABELS[factor.name] ?? factor.name}
-                        </Text>
-                        <Text style={styles.factorImpact}>
-                          {formatAdjustment(factor.impact)}
+                  {isAdmin ? (
+                    <Button
+                      icon="refresh"
+                      label="Prediksi ulang"
+                      loading={predicting}
+                      onPress={handlePredict}
+                      variant="secondary"
+                    />
+                  ) : null}
+                </ChartCard>
+
+                <ChartCard
+                  subtitle={
+                    explanation
+                      ? 'Dihitung ulang saat halaman dibuka dan tidak mengubah prediksi tersimpan.'
+                      : undefined
+                  }
+                  title="Rincian Perhitungan"
+                >
+                  {explanation ? (
+                    <DataList>
+                      <DataRow
+                        label="Lapisan 1 — basis berbobot"
+                        value={explanation.layerBreakdown.layer1.baseScore.toFixed(2)}
+                      />
+                      <DataRow
+                        label="Lapisan 2 — penyesuaian statistik"
+                        value={formatAdjustment(explanation.layerBreakdown.layer2.total)}
+                      />
+                      <DataRow
+                        label="Lapisan 3 — pencocokan pola"
+                        value={formatAdjustment(explanation.layerBreakdown.layer3.total)}
+                      />
+                      <View style={styles.totalRow}>
+                        <Text style={styles.totalLabel}>Total</Text>
+                        <Text style={styles.totalValue}>
+                          {explanation.layerBreakdown.final.toFixed(2)}
                         </Text>
                       </View>
-                      <Text style={styles.factorDescription}>{factor.description}</Text>
-                    </View>
-                  ))
-                )}
-              </Card>
+                    </DataList>
+                  ) : (
+                    <Text style={styles.bodyText}>
+                      Rincian perhitungan tidak tersedia saat ini.
+                    </Text>
+                  )}
+                </ChartCard>
 
-              <Card title="Rekomendasi">
-                <Text style={styles.bodyText}>
-                  {prediction.recommendation ?? 'Belum ada rekomendasi.'}
-                </Text>
-              </Card>
-            </View>
-          ) : (
-            <Card>
-              <EmptyState
-                icon="sparkles-outline"
-                message="Prediksi risiko akan tampil di sini setelah administrator menjalankan analisis."
-                title="Belum ada prediksi"
-              />
-              {isAdmin ? (
-                <>
-                  {predictNotice ? (
-                    <Text style={styles.predictNoticeText}>{predictNotice}</Text>
-                  ) : null}
+                <ChartCard title="Faktor Utama">
+                  {(prediction.topFactors ?? []).length === 0 ? (
+                    <Text style={styles.bodyText}>Tidak ada faktor yang dicatat.</Text>
+                  ) : (
+                    (prediction.topFactors ?? []).map((factor) => (
+                      <View key={factor.name} style={styles.factorRow}>
+                        <View style={styles.factorHeader}>
+                          <Text style={styles.factorName}>
+                            {FACTOR_LABELS[factor.name] ?? factor.name}
+                          </Text>
+                          <Text style={styles.factorImpact}>{formatAdjustment(factor.impact)}</Text>
+                        </View>
+                        <View style={styles.factorTrack}>
+                          <View
+                            style={[
+                              styles.factorFill,
+                              {
+                                backgroundColor:
+                                  factor.impact >= 0 ? colors.danger : colors.success,
+                                width: `${
+                                  maxImpact > 0
+                                    ? Math.max((Math.abs(factor.impact) / maxImpact) * 100, 4)
+                                    : 0
+                                }%`,
+                              },
+                            ]}
+                          />
+                        </View>
+                        <Text style={styles.factorDescription}>{factor.description}</Text>
+                      </View>
+                    ))
+                  )}
+                </ChartCard>
+
+                <ChartCard title="Rekomendasi">
+                  <Text style={styles.bodyText}>
+                    {prediction.recommendation ?? 'Belum ada rekomendasi.'}
+                  </Text>
+                </ChartCard>
+              </View>
+            ) : (
+              <ChartCard>
+                <EmptyState
+                  illustration="prediction"
+                  message="Prediksi risiko akan tampil di sini setelah administrator menjalankan analisis."
+                  title="Belum ada prediksi"
+                />
+                {isAdmin ? (
                   <Button
+                    icon="pulse-outline"
                     label="Prediksi sekarang"
                     loading={predicting}
                     onPress={handlePredict}
-                    style={styles.predictButton}
                   />
-                </>
-              ) : null}
-            </Card>
-          )
-        ) : null}
-      </ScrollView>
+                ) : null}
+              </ChartCard>
+            )
+          ) : null}
+        </View>
+      </Animated.ScrollView>
+
+      <Toast
+        message={predictNotice}
+        tone={predictNotice?.startsWith('Gagal') ? 'danger' : 'success'}
+        top={insets.top + 56}
+      />
 
       <ConfirmDialog
         busy={deleting}
@@ -647,11 +748,34 @@ export default function AssetDetailScreen() {
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function CompactHeader({
+  title,
+  onBack,
+  right,
+  insets,
+}: {
+  title: string;
+  onBack: () => void;
+  right: React.ReactNode;
+  insets: number;
+}) {
   return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
+    <View style={[styles.compactBar, { opacity: 1, paddingTop: insets }]}>
+      <View style={styles.compactBarInner}>
+        <Pressable
+          accessibilityLabel="Kembali"
+          accessibilityRole="button"
+          hitSlop={6}
+          onPress={onBack}
+          style={styles.compactButton}
+        >
+          <Ionicons color={colors.text} name="arrow-back" size={20} />
+        </Pressable>
+        <Text numberOfLines={1} style={styles.compactTitle}>
+          {title}
+        </Text>
+        <View style={styles.compactButton}>{right}</View>
+      </View>
     </View>
   );
 }
@@ -665,227 +789,155 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     flex: 1,
   },
-  screenHeader: {
+  scrollContent: {
+    paddingBottom: spacing.xxxl,
+  },
+  compactBar: {
+    backgroundColor: colors.surface,
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    zIndex: 10,
+  },
+  compactBarInner: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
   },
-  backButton: {
+  compactButton: {
     alignItems: 'center',
-    height: 32,
+    height: 40,
     justifyContent: 'center',
-    width: 32,
+    minWidth: 40,
   },
-  screenTitle: {
-    color: colors.text,
+  compactTitle: {
+    ...text.heading,
     flex: 1,
-    fontSize: typography.heading,
-    fontWeight: '600',
     textAlign: 'center',
+  },
+  floatingActions: {
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    zIndex: 9,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+  },
+  floatingButton: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderColor: 'rgba(255,255,255,0.35)',
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  hero: {
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
+    overflow: 'hidden',
+    paddingBottom: spacing.xxl,
+    paddingHorizontal: spacing.xl,
+  },
+  heroBlob: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 999,
+    height: 200,
+    position: 'absolute',
+    right: -60,
+    top: -40,
+    width: 200,
+  },
+  heroTopRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  heroType: {
+    ...text.label,
+    color: colors.onPrimary,
+    flex: 1,
+  },
+  heroName: {
+    ...text.display,
+    color: colors.onPrimary,
+    marginTop: spacing.md,
+  },
+  heroCode: {
+    ...text.caption,
+    color: colors.onPrimaryMuted,
+    marginTop: 2,
   },
   content: {
     gap: spacing.lg,
-    padding: spacing.lg,
-    paddingBottom: spacing.xxl,
-    paddingTop: spacing.xs,
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: spacing.lg,
   },
-  heroTop: {
+  sectionList: {
+    gap: spacing.lg,
+  },
+  gaugeWrap: {
     alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
   },
-  heroType: {
-    color: colors.muted,
-    fontSize: typography.small,
-    fontWeight: '600',
-  },
-  heroName: {
-    color: colors.text,
-    fontSize: 24,
-    fontWeight: '700',
-    marginTop: spacing.sm,
-  },
-  heroCode: {
-    color: colors.muted,
-    fontSize: typography.caption,
-    marginTop: 2,
-  },
-  divider: {
-    backgroundColor: colors.border,
-    height: 1,
-    marginVertical: spacing.md,
-  },
-  tabs: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    padding: 4,
-  },
-  tab: {
+  predictionMeta: {
     alignItems: 'center',
-    borderRadius: radius.sm,
-    flex: 1,
-    paddingVertical: spacing.sm,
-  },
-  tabActive: {
-    backgroundColor: colors.accentSoft,
-  },
-  tabLabel: {
-    color: colors.muted,
-    fontSize: typography.small,
-    fontWeight: '500',
-  },
-  tabLabelActive: {
-    color: colors.accent,
-    fontWeight: '700',
-  },
-  infoRow: {
     flexDirection: 'row',
     gap: spacing.md,
     justifyContent: 'space-between',
-    paddingVertical: 6,
   },
-  infoLabel: {
+  note: {
+    ...text.caption,
     color: colors.muted,
-    flexShrink: 0,
-    fontSize: typography.caption,
-  },
-  infoValue: {
-    color: colors.text,
     flexShrink: 1,
-    fontSize: typography.caption,
-    fontWeight: '500',
-    textAlign: 'right',
+  },
+  statusLabel: {
+    ...text.caption,
+    color: colors.muted,
   },
   statusRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 6,
-  },
-  statusLabel: {
-    color: colors.muted,
-    fontSize: typography.caption,
+    minHeight: 32,
   },
   bodyText: {
+    ...text.body,
     color: colors.textSecondary,
-    fontSize: typography.caption,
-    lineHeight: 21,
-  },
-  sectionList: {
-    gap: spacing.md,
   },
   recordHeader: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm,
   },
   recordDate: {
+    ...text.small,
     color: colors.muted,
-    fontSize: typography.small,
   },
   recordDescription: {
+    ...text.caption,
     color: colors.textSecondary,
-    fontSize: typography.caption,
-    lineHeight: 20,
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
   recordFooter: {
     borderTopColor: colors.border,
     borderTopWidth: 1,
     gap: 2,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
     paddingTop: spacing.sm,
   },
   recordMeta: {
+    ...text.small,
     color: colors.muted,
-    fontSize: typography.small,
-  },
-  scoreRow: {
-    alignItems: 'flex-end',
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  score: {
-    fontSize: 42,
-    fontWeight: '700',
-    lineHeight: 46,
-  },
-  scoreMeta: {
-    gap: spacing.xs,
-    paddingBottom: spacing.xs,
-  },
-  scoreMax: {
-    color: colors.muted,
-    fontSize: typography.small,
-  },
-  scoreTrack: {
-    backgroundColor: colors.neutralSoft,
-    borderRadius: radius.pill,
-    height: 8,
-    marginBottom: spacing.md,
-    marginTop: spacing.sm,
-    overflow: 'hidden',
-  },
-  scoreFill: {
-    borderRadius: radius.pill,
-    height: '100%',
-  },
-  disclaimer: {
-    color: colors.muted,
-    fontSize: typography.small,
-    lineHeight: 18,
-    marginTop: spacing.md,
-  },
-  factorRow: {
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
-    paddingVertical: spacing.sm,
-  },
-  factorHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  factorName: {
-    color: colors.text,
-    flex: 1,
-    fontSize: typography.caption,
-    fontWeight: '600',
-  },
-  factorImpact: {
-    color: colors.danger,
-    fontSize: typography.small,
-    fontWeight: '600',
-  },
-  factorDescription: {
-    color: colors.muted,
-    fontSize: typography.small,
-    lineHeight: 18,
-    marginTop: 2,
-  },
-  listState: {
-    padding: spacing.lg,
-  },
-  retry: {
-    marginTop: spacing.lg,
-  },
-  refreshErrorBox: {
-    backgroundColor: colors.dangerSoft,
-    borderRadius: radius.sm,
-    padding: spacing.md,
-  },
-  refreshErrorText: {
-    color: colors.danger,
-    fontSize: typography.small,
-    lineHeight: 18,
-  },
-  pressedCard: {
-    opacity: 0.85,
   },
   recordLinkRow: {
     alignItems: 'center',
@@ -894,31 +946,77 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   recordLink: {
-    color: colors.accent,
-    fontSize: typography.small,
-    fontWeight: '600',
+    ...text.captionStrong,
+    color: colors.primary,
   },
-  predictNotice: {
-    backgroundColor: colors.accentSoft,
+  factorRow: {
+    gap: 4,
+  },
+  factorHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  factorName: {
+    ...text.captionStrong,
+    flex: 1,
+  },
+  factorImpact: {
+    ...text.small,
+    color: colors.dangerInk,
+    fontVariant: ['tabular-nums'],
+  },
+  factorTrack: {
+    backgroundColor: colors.border,
+    borderRadius: radius.pill,
+    height: 6,
+    overflow: 'hidden',
+  },
+  factorFill: {
+    borderRadius: radius.pill,
+    height: '100%',
+  },
+  factorDescription: {
+    ...text.small,
+    color: colors.muted,
+  },
+  totalRow: {
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: spacing.sm,
+  },
+  totalLabel: {
+    ...text.captionStrong,
+    color: colors.text,
+  },
+  totalValue: {
+    ...text.captionStrong,
+    color: colors.primary,
+    fontVariant: ['tabular-nums'],
+  },
+  refreshErrorBox: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.dangerSoft,
     borderRadius: radius.sm,
-    marginBottom: spacing.md,
-    padding: spacing.sm,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md,
   },
-  predictNoticeText: {
-    color: colors.accent,
-    fontSize: typography.small,
-    lineHeight: 18,
+  refreshErrorText: {
+    ...text.caption,
+    color: colors.dangerInk,
+    flex: 1,
   },
-  predictButton: {
-    marginTop: spacing.md,
+  pressedCard: {
+    opacity: 0.9,
   },
-  headerAction: {
-    alignItems: 'center',
-    height: 32,
-    justifyContent: 'center',
-    width: 32,
+  skeletonWrap: {
+    paddingHorizontal: layout.screenPadding,
+    paddingTop: 80,
   },
-  manageButton: {
-    marginTop: spacing.md,
+  stateWrap: {
+    padding: spacing.lg,
+    paddingTop: 80,
   },
 });

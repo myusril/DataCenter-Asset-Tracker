@@ -113,6 +113,24 @@ export function formatRelativeTime(value: string): string {
   return formatDateTime(value);
 }
 
+/**
+ * Relative time plus the clock time while the notification is under a week old,
+ * so repeated alerts for the same asset stay distinguishable.
+ */
+export function formatNotificationTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  const minutes = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (minutes >= 7 * 24 * 60) {
+    return formatDateTime(value);
+  }
+  const hours = String(date.getHours()).padStart(2, '0');
+  const clock = String(date.getMinutes()).padStart(2, '0');
+  return `${formatRelativeTime(value)} · ${hours}.${clock}`;
+}
+
 export function formatCurrency(value: number | null | undefined): string {
   if (value === null || value === undefined) {
     return '-';
@@ -141,4 +159,25 @@ export function greeting(): string {
     return 'Selamat sore';
   }
   return 'Selamat malam';
+}
+
+const DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+const LONG_MONTHS = [
+  'Januari',
+  'Februari',
+  'Maret',
+  'April',
+  'Mei',
+  'Juni',
+  'Juli',
+  'Agustus',
+  'September',
+  'Oktober',
+  'November',
+  'Desember',
+];
+
+/** "Selasa, 4 November 2026" for the dashboard header. */
+export function formatLongDate(value: Date = new Date()): string {
+  return `${DAYS[value.getDay()]}, ${value.getDate()} ${LONG_MONTHS[value.getMonth()]} ${value.getFullYear()}`;
 }

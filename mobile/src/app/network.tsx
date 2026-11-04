@@ -227,7 +227,7 @@ export default function NetworkListScreen() {
           keyExtractor={(item) => String(item.id)}
           ListEmptyComponent={
             <EmptyState
-              icon="wifi-outline"
+              illustration="network"
               message="Coba ubah kata kunci atau status yang dipilih."
               title="Tidak ada data jaringan"
             />

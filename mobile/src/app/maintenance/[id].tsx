@@ -96,13 +96,13 @@ export default function MaintenanceDetailScreen() {
           </Card>
 
           <Card title="Pelaksanaan">
-            <InfoRow label="Jenis perawatan" value={MAINTENANCE_TYPE_LABELS[record.maintenanceType]} />
-            <InfoRow label="Tanggal" value={formatDate(record.maintenanceDate)} />
             <InfoRow label="Teknisi" value={record.technician?.fullName ?? 'Tidak dicatat'} />
             <InfoRow label="Biaya" value={formatCurrency(record.cost)} />
             <InfoRow label="Jadwal berikutnya" value={formatDate(record.nextSchedule)} />
             <InfoRow label="Dibuat" value={formatDateTime(record.createdAt)} />
-            <InfoRow label="Diperbarui" value={formatDateTime(record.updatedAt)} />
+            {record.updatedAt !== record.createdAt ? (
+              <InfoRow label="Diperbarui" value={formatDateTime(record.updatedAt)} />
+            ) : null}
           </Card>
 
           <Card title="Uraian">

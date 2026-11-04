@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors } from '../theme/colors';
-import { spacing, typography } from '../theme/spacing';
+import { spacing } from '../theme/spacing';
+import { text } from '../theme/typography';
 
 interface ScreenHeaderProps {
   title: string;
@@ -18,12 +19,13 @@ export function ScreenHeader({ title, onBack, right }: ScreenHeaderProps) {
       <Pressable
         accessibilityLabel="Kembali"
         accessibilityRole="button"
+        hitSlop={8}
         onPress={onBack}
         style={styles.side}
       >
         <Ionicons color={colors.text} name="arrow-back" size={22} />
       </Pressable>
-      <Text numberOfLines={1} style={styles.title}>
+      <Text ellipsizeMode="tail" numberOfLines={1} style={styles.title}>
         {title}
       </Text>
       <View style={styles.side}>{right}</View>
@@ -35,20 +37,19 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     flexDirection: 'row',
+    gap: spacing.sm,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
   },
   side: {
     alignItems: 'center',
-    height: 32,
+    height: 44,
     justifyContent: 'center',
-    minWidth: 32,
+    minWidth: 44,
   },
   title: {
-    color: colors.text,
+    ...text.heading,
     flex: 1,
-    fontSize: typography.heading,
-    fontWeight: '600',
     textAlign: 'center',
   },
 });

@@ -10,14 +10,15 @@ grafik.
 - **Login + auto-login** — `username` + `password`, pesan error dari API tampil inline. Token dan data
   user disimpan di AsyncStorage, sehingga sesi bertahan setelah aplikasi ditutup. Respons 401 dari
   endpoint mana pun (selain login) menghapus sesi dan kembali ke layar login.
-- **5 tab** — Dashboard, Aset, AI, Notifikasi (dengan badge belum dibaca), Profil.
-- **Dashboard** — kartu total/aktif/maintenance/nonaktif, sebaran risiko, skor rata-rata, kartu
-  "N Aset Berisiko Tinggi" yang membuka aset paling berisiko, akses cepat ke Maintenance, Jaringan,
-  Semua Aset, dan Profil.
-- **Daftar aset** — pencarian dengan debounce 400 ms, filter tipe dan status, pagination 6 aset per
-  halaman, pull-to-refresh, empty state. Admin melihat tombol **+ Aset**.
-- **Detail aset** — header status, tab **Umum / Jaringan / Maintenance / AI**. Kartu maintenance dapat
-  diketuk untuk membuka halaman detail maintenance. Tab AI menampilkan prediksi aktif, rincian lapisan
+- **5 tab** — Dashboard, Aset, Risiko, Notifikasi (dengan badge belum dibaca), Profil.
+- **Dashboard** — hero total aset + ring sebaran risiko (rincian level ada di kartu Ringkasan
+  Risiko), bar bertumpuk kondisi aset dengan legenda, bar sebaran tipe, skor rata-rata, kartu aset
+  paling berisiko (kode + skor), serta akses cepat ke Maintenance, Jaringan, Semua Aset, dan Profil.
+- **Daftar aset** — pencarian dengan debounce 400 ms, satu tombol **Filter** yang membuka panel
+  tipe + status (chip aktif bisa dilepas satu per satu), pagination 6 aset per halaman,
+  pull-to-refresh, empty state. Admin melihat tombol **+ Aset**.
+- **Detail aset** — header gradien sesuai status, tab **Umum / Jaringan / Maintenance / Risiko**. Kartu maintenance dapat
+  diketuk untuk membuka halaman detail maintenance. Tab Risiko menampilkan prediksi aktif, rincian lapisan
   (`GET /api/ai/explain/:id`), faktor utama, dan rekomendasi; admin mendapat tombol **Prediksi ulang**.
   Admin juga mendapat tombol ubah (ikon pensil di header), ubah data, dan hapus dengan dialog konfirmasi.
 - **Maintenance** — daftar seluruh riwayat dengan filter jenis, pagination, pull-to-refresh; halaman
@@ -25,23 +26,45 @@ grafik.
   menambah catatan lewat form dengan pemilih aset yang bisa dicari.
 - **Jaringan** — daftar perangkat dengan status koneksi, pencarian hostname/IP, filter status, waktu
   cek terakhir. Admin mendapat aksi **Cek** yang memperbarui baris dan menampilkan ringkasan hasil.
-- **AI** — skor rata-rata, jumlah per level, maksimal 5 aset berisiko tertinggi dengan bar skor, dialog
-  rincian perhitungan per aset, dan tombol **Prediksi semua aset** (admin) dengan ringkasan hasil.
-- **Notifikasi** — urutan belum dibaca lebih dulu, badge pada tab, tandai dibaca saat diketuk, "Tandai
-  semua dibaca", hapus satu, hapus yang sudah dibaca, waktu relatif, dan ketuk alert AI untuk membuka
-  detail aset.
+- **Risiko** — skor rata-rata dalam arc gauge, jumlah per level, penjelasan tiga lapisan (aturan,
+  statistik, pola), maksimal 5 aset berisiko tertinggi dengan bar skor, panel rincian perhitungan per
+  aset, dan tombol **Prediksi semua aset** (admin) dengan ringkasan hasil.
+- **Notifikasi** — urutan belum dibaca lebih dulu, badge pada tab, tandai dibaca saat diketuk, menu
+  **Kelola** (ikon tiga titik) untuk menandai semua dibaca dan menghapus yang sudah dibaca (dengan
+  konfirmasi), hapus satu, waktu relatif, dan ketuk alert AI untuk membuka detail aset.
 - **Form admin aset** — bagian Umum, Lokasi, dan Jaringan; validasi inline tanpa library schema;
   prefill saat mengedit; pesan konflik 409 yang terbaca (kode/serial duplikat, aset masih punya
   riwayat).
 - **Profil** — identitas, role, versi aplikasi, dan logout dengan konfirmasi.
+
+## Sistem desain (fase 1)
+
+Fase 1 merapikan lima layar inti: login, tab shell, Dashboard, daftar aset, detail aset, dan Risiko.
+Layar Maintenance, Jaringan, Notifikasi, Profil, dan formulir memang belum dirombak (fase 2).
+
+- **Token** — `src/theme/colors.ts` (palet), `spacing.ts` (spacing 4–40, radius 12/16/20/28, skala
+  huruf 11/12/14/16/20/28), `typography.ts` (Plus Jakarta Sans per bobot), `tokens.ts` (satu lapis
+  bayangan, gradien, durasi motion, warna grafik).
+- **Font** — Plus Jakarta Sans 400/500/600/700/800 dimuat di `src/app/_layout.tsx`; splash ditahan
+  sampai font dan sesi siap sehingga layar pertama tidak berkedip.
+- **Grafik** — `DonutChart`, `BarChart`, dan `RiskGauge` memakai `react-native-svg`; semua angka berasal
+  dari `GET /api/assets/statistics` dan `GET /api/ai/risk-summary` (tidak ada tren atau delta rekaan).
+- **Motion** — hanya `Animated` bawaan React Native, durasi ≤ 250 ms, dan dimatikan/dipendekkan saat
+  pengaturan *reduce motion* perangkat aktif (`useReducedMotion`).
+- **Aksesibilitas** — kontras teks ≥ 4,5:1 (warna `*Ink` untuk teks di atas latar lembut), target sentuh
+  ≥ 44 dp, teks tidak terpotong pada skala font 1,2×, dan tab memakai `adjustsFontSizeToFit`.
+- **Status** — hijau/amber/merah tetap dipakai untuk status aset; teks memakai varian `successInk`,
+  `warningInk`, dan `dangerInk` agar tetap terbaca.
+- **Risiko bukan AI** — mesin heuristik deterministik (aturan, statistik, pola). Tidak ada klaim
+  machine learning atau akurasi model.
 
 ## Prasyarat
 
 - Node.js 24.21.0 (dokumen sumber menulis Node 22).
 - Backend berjalan di `http://localhost:3000` dengan PostgreSQL 16 (port 5433) dan data seed — lihat
   `../README.md` dan `../backend/README.md`.
-- Android emulator `Medium_Phone_API_36.1` (Android 16 / API 36) + Expo Go 58 untuk verifikasi utama.
-  `expo start --web` dipakai sebagai pemeriksaan tambahan.
+- Android **Infinix X6882 (Hot 50 4G)** — Android 14, arm64 — dengan Expo Go 58 untuk verifikasi utama.
+  Emulator tidak dipakai pada fase desain ini.
 
 ## Menjalankan
 
@@ -163,15 +186,15 @@ mobile/
     │   ├── _layout.tsx      # hydration gate + Stack + pendaftaran handler 401
     │   ├── index.tsx        # redirect sesuai status login
     │   ├── (auth)/          # login
-    │   ├── (tabs)/          # Dashboard, Aset, AI, Notifikasi, Profil
+    │   ├── (tabs)/          # Dashboard, Aset, Risiko, Notifikasi, Profil
     │   ├── asset/           # new.tsx, [id]/index.tsx, [id]/edit.tsx
     │   ├── maintenance.tsx  # daftar maintenance
     │   ├── maintenance/     # [id].tsx, new.tsx
     │   └── network.tsx      # daftar jaringan
-    ├── components/          # Card, Button, StatusPill, RiskBar, Chip, FormField, AssetForm, ConfirmDialog, dll.
-    ├── hooks/useIsAdmin.ts  # gerbang role terpusat
+    ├── components/          # primitif desain: GradientHeader, ChartCard, DonutChart, BarChart, RiskGauge, SegmentedTabs, Skeleton, Sheet, Toast + komponen lama
+    ├── hooks/               # useIsAdmin, useReducedMotion, useCountUp
     ├── store/               # auth (persist AsyncStorage), notifications (badge)
-    ├── theme/               # warna dan spacing
+    ├── theme/               # colors, spacing, typography (Plus Jakarta Sans), tokens (elevation, gradien, motion)
     ├── types/api.ts         # tipe respons kontrak API
     └── utils/               # format tanggal/angka/waktu relatif, warna pill
 ```
