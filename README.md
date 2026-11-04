@@ -23,14 +23,15 @@ lengkap ada di bagian [Riwayat pengembangan](#riwayat-pengembangan).
 4. [Setup database](#setup-database)
 5. [Setup backend](#setup-backend)
 6. [Setup mobile](#setup-mobile)
-7. [Daftar perintah](#daftar-perintah)
-8. [Akun demo](#akun-demo)
-9. [Mesin prediksi risiko](#mesin-prediksi-risiko)
-10. [Struktur repository](#struktur-repository)
-11. [Kesesuaian dengan dokumen](#kesesuaian-dengan-dokumen)
-12. [Hasil pengujian](#hasil-pengujian)
-13. [Batasan dan non-goals](#batasan-dan-non-goals)
-14. [Riwayat pengembangan](#riwayat-pengembangan)
+7. [Setup push notification](#setup-push-notification)
+8. [Daftar perintah](#daftar-perintah)
+9. [Akun demo](#akun-demo)
+10. [Mesin prediksi risiko](#mesin-prediksi-risiko)
+11. [Struktur repository](#struktur-repository)
+12. [Kesesuaian dengan dokumen](#kesesuaian-dengan-dokumen)
+13. [Hasil pengujian](#hasil-pengujian)
+14. [Batasan dan non-goals](#batasan-dan-non-goals)
+15. [Riwayat pengembangan](#riwayat-pengembangan)
 
 ## Fitur
 
@@ -159,6 +160,8 @@ npm run dev
 | `SEED_ADMIN_PASSWORD` | Password akun admin saat seed; hanya dipakai `npm run prisma:seed` |
 | `SEED_TECH_PASSWORD` | Password akun teknisi saat seed |
 | `REMINDER_JOB_ENABLED` | `true` menyalakan job pengingat harian 07.00; default `false` |
+| `PUSH_ENABLED` | `true` menyalakan pengiriman FCM; default `false` |
+| `FIREBASE_SERVICE_ACCOUNT` | Path file service account JSON di server; hanya dibaca bila `PUSH_ENABLED=true` |
 
 Output yang diharapkan:
 
@@ -186,6 +189,20 @@ jatuh ke `http://localhost:3000` bila variabel tidak diisi.
 | HP fisik | `http://<IP-LAN-komputer>:3000` | HP dan komputer harus satu jaringan |
 | HP fisik lewat USB | `adb reverse tcp:3000 tcp:3000` + `http://localhost:3000` | Dipakai saat verifikasi di perangkat |
 | Web / iOS simulator | `http://localhost:3000` | |
+
+## Setup push notification
+
+Push FCM bersifat opsional dan hanya untuk Android. Tanpa Firebase, aplikasi tetap berjalan dan
+notifikasi tetap masuk ke pusat notifikasi in-app.
+
+1. Buat proyek Firebase, daftarkan aplikasi Android `com.datacentertracker.app`, unduh
+   `google-services.json`, dan letakkan di `mobile/google-services.json` (di-ignore, hanya untuk
+   build).
+2. Buat service account, simpan di server (mis. `/etc/dc-api-firebase.json`) dengan izin baca untuk
+   akun proses backend, lalu set `PUSH_ENABLED=true` dan `FIREBASE_SERVICE_ACCOUNT=<path-file>`.
+3. Bangun ulang APK dan uji dari Firebase Console maupun lewat prediksi HIGH / pengingat maintenance.
+
+Langkah lengkap, log yang diharapkan, dan tabel pemecahan masalah: `docs/FIREBASE_SETUP.md`.
 
 ## Daftar perintah
 
@@ -259,19 +276,23 @@ berlevel **Tinggi** membuat notifikasi `AI_ALERT` untuk setiap user aktif. Conto
 │   │   ├── api/              # client axios, session bridge, auth, assets, maintenance, network, ai, notifications
 │   │   ├── app/              # route Expo Router: (auth), (tabs), asset, maintenance, network
 │   │   ├── components/       # Card, Button, StatusPill, RiskBar, form fields, dialog, dll.
-│   │   ├── hooks/            # useIsAdmin
+│   │   ├── hooks/            # useIsAdmin, useReducedMotion, useCountUp
+│   │   ├── notifications/    # token FCM, channel Android, routing saat notifikasi diketuk
 │   │   ├── store/            # auth (Zustand + persist), notifications (badge)
-│   │   ├── theme/            # warna dan spacing
+│   │   ├── theme/            # warna, spacing, tipografi, token desain
 │   │   ├── types/            # tipe respons API
 │   │   └── utils/            # format tanggal/angka, warna pill
 │   └── README.md
 └── docs/
     ├── API_CONTRACT.md       # kontrak 42 endpoint (37 dokumen + 5 ekstensi)
+    ├── FIREBASE_SETUP.md     # setup push FCM dari nol, kredensial sebagai placeholder
     ├── HANDOFF.md            # status & cara melanjutkan
-    ├── adr/0001-direct-fcm-push-notifications.md
-    ├── product/personal-data.md  # inventaris data pribadi (token FCM)
+    ├── MODULES.md            # panduan modul per modul, mesin risiko, model data, alur mobile
+    ├── USER_GUIDE.md         # panduan pemakaian layar dan skenario demo 10 menit
     └── scripts/smoke.sh      # smoke test alur API
 ```
+
+Lisensi komponen pihak ketiga: `THIRD_PARTY_NOTICES.md` di akar repository.
 
 ## Kesesuaian dengan dokumen
 
@@ -280,7 +301,7 @@ bagian dokumen ke hasil yang benar-benar ada di repository.
 
 | Bagian dokumen | Tuntutan | Yang dikerjakan |
 |---|---|---|
-| §3 Struktur project | Backend moduler + mobile Expo | Backend `src/modules/*` (6 modul) dan mobile di `mobile/` dengan route `src/app/...` |
+| §3 Struktur project | Backend moduler + mobile Expo | Backend `src/modules/*` (7 modul) dan mobile di `mobile/` dengan route `src/app/...` |
 | §4 Database schema | 7 tabel + enum | 8 tabel Prisma (`users`, `assets`, `asset_locations`, `network_information`, `maintenance_history`, `ai_predictions`, `notifications`, `device_tokens`) + 8 enum |
 | §5 Backend modules | Auth 3, Asset 6, Maintenance 7, Network 8, AI 6, Notification 7 | **42 endpoint** = 37 sesuai tabel §7.1 + 5 ekstensi: jadwal/pengingat maintenance, `PATCH /api/users/me`, dan 2 endpoint perangkat push (`docs/API_CONTRACT.md`) |
 | §6 AI hybrid engine | 3 lapisan, contoh 83.5 HIGH | 3 lapisan seperti dijelaskan di atas; contoh SRV-001 direproduksi (69.5 + 5 + 9) |
@@ -443,16 +464,27 @@ Build release Android berhasil dengan `google-services.json` (file tidak di-comm
   **Izinkan**, database berisi **1** baris `device_tokens`, panjang token **142**, platform
   **ANDROID** (token tidak pernah dicetak). Membuka ulang aplikasi tidak menambah baris (tetap 1).
 - Logout menghapus baris tersebut (hitungan kembali **0**) dan aplikasi kembali ke layar login.
-- Backend lokal menulis satu peringatan saat boot: push nonaktif karena `PUSH_ENABLED=false`.
+- Setelah service account dipasang dan `PUSH_ENABLED=true`, log boot berisi
+  `Push notifications enabled (FCM)`; tanpa itu provider menjadi no-op dan log memuat peringatan
+  `Push notifications disabled (PUSH_ENABLED=false or missing service account)`.
 - Untuk menjangkau backend `http://localhost:3000`, APK uji lokal memakai manifest hasil generate
   yang ditambahi `usesCleartextTraffic="true"`; perubahan itu hanya ada di `android/` yang
   di-ignore dan **tidak** masuk commit.
 
-**Belum diverifikasi:** pengiriman FCM end-to-end. Mesin ini tidak memiliki service account Firebase,
-jadi `PUSH_ENABLED=false` dan provider menjadi no-op; tidak ada pesan dari Firebase Console yang
-dikirim ke perangkat dan tidak ada klaim delivery. Yang tersisa untuk mahasiswa: letakkan service
-account (mode `600`) di server, set `PUSH_ENABLED=true` + `FIREBASE_SERVICE_ACCOUNT`, deploy backend,
-lalu kirim pesan uji dari Firebase Console ke APK yang dibangun dengan `google-services.json`.
+**Pengiriman push terverifikasi pada 4 November 2026** dengan APK release dan backend yang memakai
+service account Firebase. Pada **Infinix X6882** (Hot 50 4G, Android 14):
+
+- Pesan uji yang dikirim dari Firebase Console sampai ke perangkat, baik aplikasi terbuka maupun di
+  latar belakang.
+- Jalur otomatis juga sampai: prediksi HIGH membuat notifikasi `AI_ALERT`, dan pengingat maintenance
+  membuat `MAINTENANCE_REMINDER`; mengetuk masing-masing membuka detail aset dan detail maintenance.
+- Kebenaran baris in-app tetap terjaga: push hanya dikirim setelah baris `notifications` commit, dan
+  eksekusi pengingat kedua tidak mengirim ulang pesan yang sama.
+
+Yang tetap bergantung pada lingkungan pemilik berikutnya: membuat proyek Firebase sendiri, meletakkan
+service account di server dengan izin baca untuk akun proses backend, menyalakan `PUSH_ENABLED`, dan
+membangun ulang APK dengan `google-services.json` milik proyek tersebut. Langkahnya ada di
+`docs/FIREBASE_SETUP.md`.
 
 ### Alur aplikasi (emulator Android dan web)
 
@@ -505,7 +537,8 @@ Batasan yang diketahui:
 - Backend lokal memakai HTTP tanpa TLS; hanya untuk pengembangan.
 - Tombol back perangkat pada Expo Go di emulator tidak memicu navigasi; tombol back pada header aplikasi
   berfungsi.
-- Uji di HP fisik belum dilakukan; verifikasi UI memakai emulator Android dan web.
+- Verifikasi UI utama dilakukan pada HP fisik **Infinix X6882** (Hot 50 4G, Android 14) dan web;
+  emulator tidak dipakai pada fase-fase terakhir.
 
 Non-goals (tidak dikerjakan): Fase 6 (EAS build, APK/IPA, distribusi), HTTPS, rate limiting, Sentry,
 Docker, CI/CD, iOS APNs, topik/segmen push, push terjadwal, mode offline SQLite, unggah gambar,
@@ -524,4 +557,7 @@ dengan `--no-ff` agar setiap fase terlihat di riwayat, ditambah satu brief pengu
 | 4 | Layar operasional (maintenance, jaringan, AI, notifikasi), form admin, refactor require cycle, dokumentasi | `feat/mobile-ops-docs` | `feat: add maintenance, network, and ai screens`, `feat: add notification center and admin forms`, `refactor: remove auth store require cycle`, `docs: update readme and handoff for delivered scope` |
 | 5 | Penguatan pengujian backend: integration suite 37 endpoint, database test terpisah, threshold coverage, dokumentasi | `test/backend-coverage` | `test: add api integration suites`, `test: enforce coverage threshold`, `docs: document test coverage` |
 
-Detail status terakhir dan cara melanjutkan: `docs/HANDOFF.md`. Kontrak API: `docs/API_CONTRACT.md`.
+Detail status terakhir dan cara melanjutkan: `docs/HANDOFF.md`. Kontrak API:
+`docs/API_CONTRACT.md`. Penjelasan modul per modul, rumus risiko, model data, dan alur mobile:
+`docs/MODULES.md`. Cara memakai layar dan skenario demo: `docs/USER_GUIDE.md`. Lisensi pihak ketiga:
+`THIRD_PARTY_NOTICES.md`.

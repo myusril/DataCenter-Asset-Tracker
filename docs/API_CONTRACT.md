@@ -230,7 +230,7 @@ Item list:
   "network": {
     "connectionStatus": "ONLINE",
     "hostname": "web-srv-01",
-    "ipAddress": "192.168.1.10"
+    "ipAddress": "203.0.113.10"
   }
 }
 ```
@@ -520,9 +520,9 @@ Semua endpoint network membutuhkan token. `GET` boleh untuk semua role; `POST`, 
   "id": 1,
   "assetId": 1,
   "hostname": "web-srv-01",
-  "ipAddress": "192.168.1.10",
+  "ipAddress": "203.0.113.10",
   "subnetMask": "255.255.255.0",
-  "gateway": "192.168.1.1",
+  "gateway": "203.0.113.1",
   "macAddress": "AA:BB:CC:00:00:01",
   "connectionStatus": "ONLINE",
   "lastChecked": "2026-10-30T16:35:00.000Z",
@@ -563,9 +563,9 @@ ini mengikuti jumlah 8.
 {
   "assetId": 1,
   "hostname": "web-srv-01",
-  "ipAddress": "192.168.1.10",
+  "ipAddress": "203.0.113.10",
   "subnetMask": "255.255.255.0",
-  "gateway": "192.168.1.1",
+  "gateway": "203.0.113.1",
   "macAddress": "AA:BB:CC:00:00:01",
   "connectionStatus": "ONLINE",
   "notes": "VLAN 10"
