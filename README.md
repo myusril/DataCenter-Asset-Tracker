@@ -56,6 +56,9 @@ lengkap ada di bagian [Riwayat pengembangan](#riwayat-pengembangan).
 
 - Login + auto-login (token & user disimpan di AsyncStorage), logout dengan konfirmasi, penanganan 401
   yang mengakhiri sesi dan kembali ke layar login.
+- Registrasi teknisi di layar `/(auth)/register` (nama lengkap, username, email, password + konfirmasi);
+  akun baru selalu berperan **TECHNICIAN** dan setelah berhasil login terbuka dengan username terisi.
+  Pendaftaran dapat dimatikan per build lewat `EXPO_PUBLIC_ALLOW_REGISTRATION=false`.
 - 5 tab: **Dashboard, Aset, AI, Notifikasi, Profil**.
 - Dashboard: statistik aset, sebaran risiko, kartu "N Aset Berisiko Tinggi" yang membuka detail aset,
   akses cepat ke Maintenance dan Jaringan.
@@ -524,8 +527,12 @@ dan data yang sama; baris tabel di atas mencantumkan platformnya.
 
 Batasan yang diketahui:
 
-- Registrasi admin kedua membutuhkan token admin (aturan keamanan); mobile belum memiliki layar
-  registrasi.
+- Registrasi admin kedua membutuhkan token admin (aturan keamanan). Formulir registrasi mobile tidak
+  menyediakan pemilih role: setiap akun yang dibuat dari aplikasi berperan TECHNICIAN, sedangkan admin
+  pertama berasal dari seed atau endpoint registrasi dengan token admin.
+- `EXPO_PUBLIC_ALLOW_REGISTRATION=false` hanya menyembunyikan UI registrasi (tautan dan rute dialihkan
+  ke login). Ini bukan batas keamanan: deployment publik juga harus memblokir
+  `POST /api/auth/register` di server atau WAF.
 - Form maintenance tidak dapat memilih teknisi lain karena API tidak menyediakan daftar user; teknisi
   diisi otomatis dari akun yang login.
 - API memperlakukan kolom teks opsional yang kosong sebagai "tidak diubah", jadi mengosongkan nama

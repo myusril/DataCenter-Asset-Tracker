@@ -24,6 +24,25 @@ server dengan izin baca untuk akun proses backend, dan membangun ulang APK denga
 Brief 9 (jadwal maintenance + pengingat otomatis) sudah di `main`: 2 endpoint ekstensi dan job harian,
 layar `/schedule`, kartu dashboard, dan pemetaan notifikasi `MAINTENANCE_REMINDER`.
 
+Brief 14 (perbaikan hasil review layar registrasi mobile) selesai pada branch
+`fix/mobile-register-review`, yang berbasis `feat/mobile-register` (bukan `main`) agar perbaikan bisa
+di-merge bersama commit layar registrasi:
+
+- `registerRequest` memakai bentuk respons sebenarnya, `{ user }` — bukan `{ token, user }`.
+- Setelah registrasi berhasil, aplikasi kembali ke login dengan username terisi dan pesan
+  “Akun berhasil dibuat”; layar tidak lagi berganti tanpa umpan balik.
+- Kedua tombol mata punya `accessibilityLabel`/`accessibilityRole`, input punya label programatik,
+  dan tautan “Masuk di sini” memakai `router.replace` sehingga tetap bekerja tanpa riwayat navigasi.
+- Registrasi dapat dimatikan per build lewat `EXPO_PUBLIC_ALLOW_REGISTRATION=false` (default `true`):
+  tautan **Daftar** hilang dan rute `/(auth)/register` dialihkan ke login.
+- Formulir mobile tidak punya pemilih role dan tidak mengirim role, sehingga API selalu membuat
+  **TECHNICIAN**. Admin pertama hanya berasal dari seed demo atau endpoint registrasi dengan token
+  admin; akun admin tidak pernah dibuat dari layar ini.
+
+Penting untuk deployment publik: flag tersebut **hanya UI**, bukan batas keamanan. Server atau WAF
+harus tetap memblokir `POST /api/auth/register`, karena endpoint itu publik menurut kontrak API dan
+dapat dipanggil langsung tanpa aplikasi.
+
 Sudah tersedia:
 
 - Skema Prisma 8 tabel + seed demo (2 user, 9 aset, 8 maintenance, 8 baris network). Tabel
@@ -54,7 +73,7 @@ Sudah tersedia:
   verifikasi token, dan integration test HTTP untuk 42 endpoint dengan database
   `datacenter_tracker_test`. Statements 89.75%, lines 89.72%, functions 94.19%, branches 73.56%;
   threshold di `jest.config.mjs`. Smoke flow API tetap ada di `docs/scripts/smoke.sh`.
-- Aplikasi mobile lengkap: login/auto-login, dashboard, daftar aset, detail aset 4 tab, maintenance
+- Aplikasi mobile lengkap: login/auto-login, registrasi teknisi (dapat dimatikan per build), dashboard, daftar aset, detail aset 4 tab, maintenance
   (daftar/detail/form), jaringan (daftar + cek), tab AI (ringkasan, top 5, dialog explain, prediksi
   batch), pusat notifikasi dengan badge, jadwal maintenance, form tambah/ubah/hapus aset, profil
   (termasuk **Edit profil**: nama, email, password), dan role gating.
@@ -63,7 +82,8 @@ Sudah tersedia:
 
 | Route | Layar | Akses | Keterangan |
 |---|---|---|---|
-| `/(auth)/login` | Login | publik | Username + password, error inline |
+| `/(auth)/login` | Login | publik | Username + password, error inline; menampilkan pesan sukses dan username terisi setelah registrasi |
+| `/(auth)/register` | Registrasi teknisi | publik (bila `EXPO_PUBLIC_ALLOW_REGISTRATION` aktif) | Nama lengkap, username, email, password + konfirmasi; selalu membuat TECHNICIAN; dialihkan ke login bila flag `false` |
 | `/(tabs)` | Dashboard | semua role | Statistik, ringkasan risiko, kartu risiko tinggi, akses cepat |
 | `/(tabs)/assets` | Daftar aset | semua role | Cari, filter, pagination, tarik-untuk-muat-ulang; tombol tambah (ADMIN) |
 | `/(tabs)/ai` | Analisis risiko | semua role | Rata-rata, jumlah per level, top 5, explain; tombol prediksi batch (ADMIN) |
@@ -144,8 +164,8 @@ Environment variable (nama saja): `DATABASE_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`
 `NODE_ENV`, `CORS_ORIGIN`, `SEED_ADMIN_PASSWORD`, `SEED_TECH_PASSWORD`, `REMINDER_JOB_ENABLED`
 (default `false`), `PUSH_ENABLED` (default `false`), `FIREBASE_SERVICE_ACCOUNT` (path JSON service
 account di server, harus dapat dibaca akun proses backend — mis. `root:<grup> 640`, bukan `600 root`),
-dan `EXPO_PUBLIC_API_URL` untuk mobile. Nilai asli hanya ada di `backend/.env`
-(tidak di-commit).
+`EXPO_PUBLIC_API_URL`, dan `EXPO_PUBLIC_ALLOW_REGISTRATION` untuk mobile. Nilai asli hanya ada di
+`backend/.env` (tidak di-commit).
 
 ## Kondisi data demo saat handoff
 
@@ -198,7 +218,6 @@ Setelah reset, jalankan prediksi batch sekali agar dashboard dan tab AI kembali 
   push, mode offline SQLite, unggah gambar aset, export PDF/Excel, dark mode, QR scanner, adaptive
   weight, HTTPS, rate limiting, Sentry, Docker, CI/CD, direktori `ai-service/`.
 - Endpoint daftar user sehingga teknisi pada form maintenance belum dapat dipilih.
-- Layar registrasi di mobile (registrasi hanya lewat API).
 
 ## Resume protocol
 

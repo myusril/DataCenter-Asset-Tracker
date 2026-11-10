@@ -10,6 +10,11 @@ grafik.
 - **Login + auto-login** — `username` + `password`, pesan error dari API tampil inline. Token dan data
   user disimpan di AsyncStorage, sehingga sesi bertahan setelah aplikasi ditutup. Respons 401 dari
   endpoint mana pun (selain login) menghapus sesi dan kembali ke layar login.
+- **Registrasi teknisi (opsional per build)** — layar `/(auth)/register` membuat akun dengan nama
+  lengkap, username, email, password, dan konfirmasi password. Akun yang dibuat **selalu berperan
+  Teknisi**; formulir tidak mengirim role dan tidak menyediakan pemilih role. Setelah berhasil,
+  aplikasi kembali ke login dengan username terisi dan pesan “Akun berhasil dibuat”. Pendaftaran
+  dikendalikan build flag `EXPO_PUBLIC_ALLOW_REGISTRATION` (lihat bagian konfigurasi di bawah).
 - **5 tab** — Dashboard, Aset, Risiko, Notifikasi (dengan badge belum dibaca), Profil.
 - **Dashboard** — hero total aset + ring sebaran risiko (rincian level ada di kartu Ringkasan
   Risiko), bar bertumpuk kondisi aset dengan legenda, bar sebaran tipe, skor rata-rata, kartu aset
@@ -133,6 +138,24 @@ bila variabel tidak diisi, dan tidak ada alamat IP yang ditulis di dalam kode.
 
 File `.env` tidak di-commit; hanya `.env.example` yang masuk repositori.
 
+### Konfigurasi registrasi (`EXPO_PUBLIC_ALLOW_REGISTRATION`)
+
+| Nilai | Perilaku |
+|---|---|
+| `true` (default) | Tautan **Daftar** tampil di login dan `/(auth)/register` dapat dibuka. Cocok untuk build demo. |
+| `false` | Tautan **Daftar** disembunyikan dan membuka `/(auth)/register` langsung dialihkan ke login. |
+
+Nilai dibaca saat Metro/Gradle membundel JavaScript, jadi mengubahnya memerlukan restart Metro atau
+build ulang. Seperti semua variabel `EXPO_PUBLIC_*`, nilainya ikut tertanam di bundel aplikasi dan
+bukan rahasia.
+
+**Bukan batas keamanan.** Flag ini hanya menyembunyikan UI. Siapa pun yang bisa memanggil API tetap
+dapat mengirim `POST /api/auth/register` secara langsung. Pada deployment publik, server atau WAF di
+depan API juga harus memblokir endpoint tersebut; jangan mengandalkan aplikasi mobile.
+
+Akun **ADMIN** pertama tidak pernah dibuat dari formulir ini: gunakan seed demo atau endpoint
+registrasi dengan token admin. Formulir mobile selalu menghasilkan `TECHNICIAN`.
+
 ## Build APK (Android, lokal)
 
 APK dibangun langsung dengan Gradle di mesin pengembang; tidak memakai EAS, akun Expo, atau
@@ -211,13 +234,13 @@ Catatan:
 mobile/
 ├── app.json                 # nama, scheme, plugin expo-router + expo-notifications
 ├── app.config.js            # menambahkan googleServicesFile hanya bila file ada
-├── .env.example             # EXPO_PUBLIC_API_URL
+├── .env.example             # EXPO_PUBLIC_API_URL, EXPO_PUBLIC_ALLOW_REGISTRATION
 └── src/
     ├── api/                 # client axios, session bridge, auth, users, assets, maintenance, network, ai, notifications
     ├── app/                 # route Expo Router
     │   ├── _layout.tsx      # hydration gate + Stack + pendaftaran handler 401
     │   ├── index.tsx        # redirect sesuai status login
-    │   ├── (auth)/          # login
+    │   ├── (auth)/          # login, register (register dapat dimatikan lewat flag)
     │   ├── (tabs)/          # Dashboard, Aset, Risiko, Notifikasi, Profil
     │   ├── asset/           # new.tsx, [id]/index.tsx, [id]/edit.tsx
     │   ├── maintenance.tsx  # daftar maintenance
@@ -225,6 +248,7 @@ mobile/
     │   ├── schedule.tsx     # jadwal maintenance + trigger pengingat (admin)
     │   └── network.tsx      # daftar jaringan
     ├── components/          # primitif desain: GradientHeader, ChartCard, DonutChart, BarChart, RiskGauge, SegmentedTabs, Skeleton, Sheet, Toast + komponen lama
+    ├── config/              # features.ts: build flag registrasi
     ├── hooks/               # useIsAdmin, useReducedMotion, useCountUp
     ├── notifications/       # push.ts: izin, channel Android, token FCM, tap routing
     ├── store/               # auth (persist AsyncStorage), notifications (badge)
@@ -322,6 +346,22 @@ dari Firebase Console, `AI_ALERT` hasil prediksi HIGH, dan `MAINTENANCE_REMINDER
 pemilik berikutnya adalah memakai proyek Firebase sendiri (`mobile/google-services.json`), meletakkan
 service account di server agar dapat dibaca proses backend, menyalakan `PUSH_ENABLED`, lalu membangun
 ulang APK. Langkah lengkap: `../docs/FIREBASE_SETUP.md`.
+
+### Brief 14 — registrasi di HP fisik (10 November 2026)
+
+Verifikasi memakai APK debug lokal (Expo Go tidak lagi mendukung `expo-notifications`, sehingga
+aplikasi ini dijalankan sebagai build native) pada **Infinix X6882** (Android 14) dengan backend lokal
+dan `adb reverse` untuk port 3000/8081. Akun uji `qa_reg_14` dibuat sintetis dan dihapus dari database
+lokal setelah pengujian.
+
+| Alur | Hasil yang diamati |
+|---|---|
+| Flag `true` — login | Tautan **Daftar** tampil dan membuka layar registrasi |
+| Flag `true` — registrasi | Formulir terkirim; akun tersimpan dengan role **TECHNICIAN** (dicek langsung di database); aplikasi kembali ke login, username terisi, dan pesan “Akun berhasil dibuat. Silakan masuk dengan akun baru Anda.” tampil |
+| Flag `true` — duplikat | Username yang sudah dipakai menampilkan pesan API “A user with this username already exists” inline, tanpa JSON mentah |
+| Flag `false` — login | Tautan **Daftar** tidak tampil |
+| Flag `false` — rute langsung | `datacentertracker:///(auth)/register` tetap berakhir di layar login. Rute yang sama dengan flag `true` membuka layar registrasi, sehingga pengalihan terbukti berasal dari flag |
+| Tipe | `npx tsc --noEmit` bersih |
 
 ### Batasan
 
