@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -19,6 +19,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { extractErrorMessage } from '../../api/client';
 import { registerRequest } from '../../api/auth';
 import { Button } from '../../components/Button';
+import { ALLOW_REGISTRATION } from '../../config/features';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { colors } from '../../theme/colors';
 import { radius, spacing } from '../../theme/spacing';
@@ -35,7 +36,7 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
+
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
@@ -57,10 +58,16 @@ export default function RegisterScreen() {
     }).start();
   }, [enter, reduced]);
 
+  // The build flag disables self-registration in public builds. The API must
+  // block POST /api/auth/register too; hiding the screen is not protection.
+  if (!ALLOW_REGISTRATION) {
+    return <Redirect href="/(auth)/login" />;
+  }
+
   async function handleSubmit() {
     if (isSubmitting) return;
 
-    // Validasi dasar
+    // Local validation first so an obvious mistake never reaches the API.
     if (!fullName.trim() || !username.trim() || !email.trim() || !password) {
       setError('Semua kolom bertanda wajib diisi.');
       return;
@@ -84,9 +91,13 @@ export default function RegisterScreen() {
         email,
         password,
       });
-      
-      // Jika sukses, langsung arahkan ke halaman login
-      router.replace('/(auth)/login');
+
+      // The API defaults the role to TECHNICIAN because this form never sends
+      // one. Hand the username back so login can pre-fill it.
+      router.replace({
+        pathname: '/(auth)/login',
+        params: { registered: '1', username: username.trim() },
+      });
     } catch (caught) {
       setError(extractErrorMessage(caught));
     } finally {
@@ -98,7 +109,7 @@ export default function RegisterScreen() {
     <SafeAreaView edges={['bottom']} style={styles.safe}>
       <StatusBar style="light" />
       <View pointerEvents="none" style={[styles.statusScrim, { height: insets.top }]} />
-      
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
@@ -139,7 +150,8 @@ export default function RegisterScreen() {
                 Registrasi
               </Text>
               <Text style={styles.cardHint}>
-                Lengkapi data di bawah ini untuk mendaftar.
+                Lengkapi data di bawah ini untuk mendaftar. Akun baru selalu berperan Teknisi; akun
+                admin hanya dibuat lewat seed atau endpoint administrator.
               </Text>
 
               {/* Nama Lengkap */}
@@ -147,7 +159,9 @@ export default function RegisterScreen() {
               <View style={[styles.inputWrap, focused === 'fullName' ? styles.inputFocused : null]}>
                 <Ionicons color={colors.muted} name="card-outline" size={18} />
                 <TextInput
+                  accessibilityLabel="Nama lengkap"
                   autoCapitalize="words"
+                  autoComplete="name"
                   onBlur={() => setFocused(null)}
                   onChangeText={setFullName}
                   onFocus={() => setFocused('fullName')}
@@ -163,7 +177,9 @@ export default function RegisterScreen() {
               <View style={[styles.inputWrap, focused === 'username' ? styles.inputFocused : null]}>
                 <Ionicons color={colors.muted} name="person-outline" size={18} />
                 <TextInput
+                  accessibilityLabel="Username"
                   autoCapitalize="none"
+                  autoComplete="username"
                   autoCorrect={false}
                   onBlur={() => setFocused(null)}
                   onChangeText={setUsername}
@@ -180,7 +196,9 @@ export default function RegisterScreen() {
               <View style={[styles.inputWrap, focused === 'email' ? styles.inputFocused : null]}>
                 <Ionicons color={colors.muted} name="mail-outline" size={18} />
                 <TextInput
+                  accessibilityLabel="Email"
                   autoCapitalize="none"
+                  autoComplete="email"
                   autoCorrect={false}
                   keyboardType="email-address"
                   onBlur={() => setFocused(null)}
@@ -198,7 +216,9 @@ export default function RegisterScreen() {
               <View style={[styles.inputWrap, focused === 'password' ? styles.inputFocused : null]}>
                 <Ionicons color={colors.muted} name="lock-closed-outline" size={18} />
                 <TextInput
+                  accessibilityLabel="Password"
                   autoCapitalize="none"
+                  autoComplete="new-password"
                   autoCorrect={false}
                   onBlur={() => setFocused(null)}
                   onChangeText={setPassword}
@@ -210,8 +230,10 @@ export default function RegisterScreen() {
                   value={password}
                 />
                 <Pressable
+                  accessibilityLabel={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                  accessibilityRole="button"
                   hitSlop={10}
-                  onPress={() => setShowPassword((c) => !c)}
+                  onPress={() => setShowPassword((current) => !current)}
                   style={styles.eye}
                 >
                   <Ionicons color={colors.muted} name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={18} />
@@ -223,7 +245,9 @@ export default function RegisterScreen() {
               <View style={[styles.inputWrap, focused === 'confirm' ? styles.inputFocused : null]}>
                 <Ionicons color={colors.muted} name="lock-closed-outline" size={18} />
                 <TextInput
+                  accessibilityLabel="Konfirmasi password"
                   autoCapitalize="none"
+                  autoComplete="new-password"
                   autoCorrect={false}
                   onBlur={() => setFocused(null)}
                   onChangeText={setConfirmPassword}
@@ -236,8 +260,14 @@ export default function RegisterScreen() {
                   value={confirmPassword}
                 />
                 <Pressable
+                  accessibilityLabel={
+                    showConfirmPassword
+                      ? 'Sembunyikan konfirmasi password'
+                      : 'Tampilkan konfirmasi password'
+                  }
+                  accessibilityRole="button"
                   hitSlop={10}
-                  onPress={() => setShowConfirmPassword((c) => !c)}
+                  onPress={() => setShowConfirmPassword((current) => !current)}
                   style={styles.eye}
                 >
                   <Ionicons color={colors.muted} name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={18} />
@@ -262,7 +292,11 @@ export default function RegisterScreen() {
             {/* Tombol Kembali ke Login */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>Sudah punya akun? </Text>
-              <Pressable onPress={() => router.back()} hitSlop={10}>
+              <Pressable
+                accessibilityRole="link"
+                hitSlop={10}
+                onPress={() => router.replace('/(auth)/login')}
+              >
                 <Text style={styles.linkText}>Masuk di sini</Text>
               </Pressable>
             </View>

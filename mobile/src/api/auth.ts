@@ -17,6 +17,10 @@ export async function loginRequest(
   return response.data.data;
 }
 
+export interface RegisterResult {
+  user: User;
+}
+
 export interface RegisterPayload {
   username: string;
   email: string;
@@ -26,8 +30,8 @@ export interface RegisterPayload {
 
 export async function registerRequest(
   payload: RegisterPayload,
-): Promise<LoginResult> {
-  const response = await api.post<ApiEnvelope<LoginResult>>('/api/auth/register', {
+): Promise<RegisterResult> {
+  const response = await api.post<ApiEnvelope<RegisterResult>>('/api/auth/register', {
     username: payload.username.trim(),
     email: payload.email.trim(),
     password: payload.password,

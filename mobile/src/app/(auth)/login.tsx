@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -18,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { API_URL, extractErrorMessage } from '../../api/client';
 import { Button } from '../../components/Button';
+import { ALLOW_REGISTRATION } from '../../config/features';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useAuthStore } from '../../store/auth';
 import { colors } from '../../theme/colors';
@@ -31,10 +32,16 @@ export default function LoginScreen() {
   const reduced = useReducedMotion();
   const login = useAuthStore((state) => state.login);
   const isSubmitting = useAuthStore((state) => state.isSubmitting);
+  const params = useLocalSearchParams<{ registered?: string; username?: string }>();
 
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(
+    typeof params.username === 'string' ? params.username : '',
+  );
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(
+    params.registered === '1' ? 'Akun berhasil dibuat. Silakan masuk dengan akun baru Anda.' : null,
+  );
   const [focused, setFocused] = useState<'username' | 'password' | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -63,6 +70,7 @@ export default function LoginScreen() {
     }
 
     setError(null);
+    setNotice(null);
     try {
       await login(username, password);
       router.replace('/(tabs)');
@@ -171,6 +179,13 @@ export default function LoginScreen() {
                 </Pressable>
               </View>
 
+              {notice ? (
+                <View accessibilityLiveRegion="polite" style={styles.noticeBox}>
+                  <Ionicons color={colors.successInk} name="checkmark-circle" size={18} />
+                  <Text style={styles.noticeText}>{notice}</Text>
+                </View>
+              ) : null}
+
               {error ? (
                 <View accessibilityLiveRegion="polite" style={styles.errorBox}>
                   <Ionicons color={colors.dangerInk} name="alert-circle" size={18} />
@@ -193,14 +208,19 @@ export default function LoginScreen() {
               </Text>
             </View>
 
-            {/* --- TAMBAHAN TOMBOL REGISTER  --- */}
-            <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl }}>
-              <Text style={{ ...text.body, color: colors.muted }}>Belum punya akun ? </Text>
-              <Pressable onPress={() => router.push('/(auth)/register')} hitSlop={10}>
-                <Text style={{ ...text.body, color: colors.primary, fontWeight: 'bold' }}>Daftar</Text>
-              </Pressable>
-            </View>
-
+            {/* Hidden when the build flag disables self-registration. */}
+            {ALLOW_REGISTRATION ? (
+              <View style={styles.registerRow}>
+                <Text style={styles.registerText}>Belum punya akun? </Text>
+                <Pressable
+                  accessibilityRole="link"
+                  hitSlop={10}
+                  onPress={() => router.push('/(auth)/register')}
+                >
+                  <Text style={styles.registerLink}>Daftar</Text>
+                </Pressable>
+              </View>
+            ) : null}
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -322,6 +342,34 @@ const styles = StyleSheet.create({
     ...text.caption,
     color: colors.dangerInk,
     flex: 1,
+  },
+  noticeBox: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.successSoft,
+    borderRadius: radius.sm,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+  },
+  noticeText: {
+    ...text.caption,
+    color: colors.successInk,
+    flex: 1,
+  },
+  registerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: spacing.xl,
+  },
+  registerText: {
+    ...text.body,
+    color: colors.muted,
+  },
+  registerLink: {
+    ...text.body,
+    color: colors.primary,
+    fontWeight: 'bold',
   },
   submit: {
     marginTop: spacing.xl,
