@@ -192,6 +192,15 @@ export default function LoginScreen() {
                 {API_URL}
               </Text>
             </View>
+
+            {/* --- TAMBAHAN TOMBOL REGISTER  --- */}
+            <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: spacing.xl }}>
+              <Text style={{ ...text.body, color: colors.muted }}>Belum punya akun ? </Text>
+              <Pressable onPress={() => router.push('/(auth)/register')} hitSlop={10}>
+                <Text style={{ ...text.body, color: colors.primary, fontWeight: 'bold' }}>Daftar</Text>
+              </Pressable>
+            </View>
+
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
